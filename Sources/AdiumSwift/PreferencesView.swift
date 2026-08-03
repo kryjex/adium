@@ -8,7 +8,9 @@ public struct PreferencesView: View {
     @AppStorage("showOfflineContacts") private var showOfflineContacts: Bool = true
     
     @State private var showAddAccountSheet = false
+    @State private var accountToConfigure: Account? = nil
     @State private var selectedAccountID: UUID?
+    @State private var backupStatusMessage: String? = nil
     
     public init() {}
     
@@ -56,9 +58,17 @@ public struct PreferencesView: View {
                                 VStack(alignment: .leading, spacing: 1) {
                                     Text(acc.username)
                                         .font(.system(size: 11, weight: .medium))
-                                    Text(acc.accountProtocol.rawValue)
-                                        .font(.system(size: 9))
-                                        .foregroundColor(.secondary)
+                                    HStack(spacing: 4) {
+                                        Text(acc.accountProtocol.rawValue)
+                                            .font(.system(size: 9))
+                                            .foregroundColor(.secondary)
+                                        
+                                        if acc.server != nil || acc.port != nil || acc.resource != nil {
+                                            Text("• Avanzada")
+                                                .font(.system(size: 8, weight: .bold))
+                                                .foregroundColor(.accentColor)
+                                        }
+                                    }
                                 }
                                 
                                 Spacer()
@@ -70,6 +80,10 @@ public struct PreferencesView: View {
                             }
                             .tag(acc.id)
                             .contextMenu {
+                                Button("Opciones Avanzadas...") {
+                                    accountToConfigure = acc
+                                }
+                                Divider()
                                 Button(role: .destructive) {
                                     bridge.removeAccount(acc)
                                     if selectedAccountID == acc.id {
@@ -83,7 +97,7 @@ public struct PreferencesView: View {
                         .listStyle(.inset)
                         .cornerRadius(6)
                         
-                        // Classic macOS + / - toolbar bar
+                        // Classic macOS toolbar + / - / gear
                         HStack(spacing: 0) {
                             Button(action: { showAddAccountSheet = true }) {
                                 Image(systemName: "plus")
@@ -111,6 +125,23 @@ public struct PreferencesView: View {
                             .buttonStyle(.plain)
                             .disabled(selectedAccountID == nil)
                             .help("Eliminar cuenta seleccionada")
+                            
+                            Divider()
+                                .frame(height: 12)
+                            
+                            Button(action: {
+                                if let acc = selectedAccount {
+                                    accountToConfigure = acc
+                                }
+                            }) {
+                                Label("Opciones Avanzadas", systemImage: "gearshape")
+                                    .font(.system(size: 10, weight: .medium))
+                                    .padding(.horizontal, 8)
+                                    .frame(height: 22)
+                            }
+                            .buttonStyle(.plain)
+                            .disabled(selectedAccountID == nil)
+                            .help("Opciones avanzadas de la cuenta seleccionada")
                             
                             Spacer()
                         }
@@ -146,21 +177,144 @@ public struct PreferencesView: View {
             .tabItem {
                 Label("General", systemImage: "gearshape.fill")
             }
+            
+            // Events Engine Settings Tab
+            EventsPreferencesTab()
+                .tabItem {
+                    Label("Eventos", systemImage: "bell.badge.fill")
+                }
+
+            
+            // Backup & Data Tab
+            VStack(alignment: .leading, spacing: 14) {
+                Text("Respaldo y Datos")
+                    .font(.system(size: 13, weight: .bold))
+                
+                Text("Exporta o restaura la configuración completa de Adium, cuentas, lista de contactos y el historial de chats (sin contraseñas en claro).")
+                    .font(.system(size: 11))
+                    .foregroundColor(.secondary)
+                
+                Divider()
+                
+                // System stats
+                VStack(alignment: .leading, spacing: 6) {
+                    Text("Resumen de Datos Actuales")
+                        .font(.system(size: 11, weight: .semibold))
+                    
+                    HStack(spacing: 24) {
+                        VStack(alignment: .leading) {
+                            Text("Cuentas:")
+                                .font(.system(size: 10))
+                                .foregroundColor(.secondary)
+                            Text("\(bridge.accounts.count)")
+                                .font(.system(size: 14, weight: .bold))
+                        }
+                        
+                        VStack(alignment: .leading) {
+                            Text("Contactos:")
+                                .font(.system(size: 10))
+                                .foregroundColor(.secondary)
+                            Text("\(bridge.contacts.count)")
+                                .font(.system(size: 14, weight: .bold))
+                        }
+                        
+                        VStack(alignment: .leading) {
+                            Text("Transcripciones:")
+                                .font(.system(size: 10))
+                                .foregroundColor(.secondary)
+                            Text("\(ChatLogStore.shared.allLogHandles().count) chats")
+                                .font(.system(size: 14, weight: .bold))
+                        }
+                    }
+                    .padding(10)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .background(Color(nsColor: .controlBackgroundColor).opacity(0.6))
+                    .cornerRadius(6)
+                }
+                
+                Divider()
+                
+                HStack(spacing: 10) {
+                    Button(action: {
+                        BackupManager.shared.promptExportBackup { result in
+                            switch result {
+                            case .success(let url):
+                                backupStatusMessage = "Respaldo exportado exitosamente en \(url.lastPathComponent)"
+                            case .failure(let error):
+                                backupStatusMessage = "Error al exportar: \(error.localizedDescription)"
+                            }
+                        }
+                    }) {
+                        Label("Exportar Respaldo...", systemImage: "square.and.arrow.up")
+                            .font(.system(size: 11))
+                    }
+                    .buttonStyle(.borderedProminent)
+                    
+                    Button(action: {
+                        BackupManager.shared.promptImportBackup { result in
+                            switch result {
+                            case .success(let url):
+                                backupStatusMessage = "Respaldo restaurado exitosamente desde \(url.lastPathComponent)"
+                            case .failure(let error):
+                                backupStatusMessage = "Error al restaurar: \(error.localizedDescription)"
+                            }
+                        }
+                    }) {
+                        Label("Restaurar Respaldo...", systemImage: "square.and.arrow.down")
+                            .font(.system(size: 11))
+                    }
+                    
+                    Spacer()
+                    
+                    Button(action: {
+                        TranscriptViewerWindowController.shared.show()
+                    }) {
+                        Label("Abrir Visor", systemImage: "clock.arrow.circlepath")
+                            .font(.system(size: 11))
+                    }
+                }
+                
+                if let status = backupStatusMessage {
+                    HStack(spacing: 6) {
+                        Image(systemName: status.contains("Error") ? "exclamationmark.triangle.fill" : "checkmark.circle.fill")
+                            .foregroundColor(status.contains("Error") ? .red : .green)
+                        Text(status)
+                            .font(.system(size: 10))
+                            .foregroundColor(.secondary)
+                    }
+                    .padding(.top, 2)
+                }
+                
+                Spacer()
+            }
+            .padding(16)
+            .tabItem {
+                Label("Respaldo y Datos", systemImage: "externaldrive.fill")
+            }
         }
-        .frame(width: 480, height: 300)
+        .frame(width: 540, height: 380)
         .sheet(isPresented: $showAddAccountSheet) {
             AddAccountSheet(isPresented: $showAddAccountSheet)
+        }
+        .sheet(item: $accountToConfigure) { acc in
+            AccountOptionsSheet(account: acc, isPresented: Binding(get: { accountToConfigure != nil }, set: { if !$0 { accountToConfigure = nil } }))
         }
     }
 }
 
-struct AddAccountSheet: View {
+public struct AddAccountSheet: View {
     @Binding var isPresented: Bool
     @Bindable var bridge = PurpleBridgeService.shared
     
     @State private var selectedProtocol: AccountProtocol = .teams
     @State private var username: String = ""
     @State private var password: String = ""
+    @State private var showAdvancedOptions = false
+    
+    @State private var server: String = ""
+    @State private var port: String = ""
+    @State private var resource: String = ""
+    @State private var useSSL: Bool = true
     
     var usernameLabel: String {
         switch selectedProtocol {
@@ -184,7 +338,7 @@ struct AddAccountSheet: View {
         return !password.isEmpty
     }
     
-    var body: some View {
+    public var body: some View {
         VStack(spacing: 14) {
             Text("Añadir Cuenta de Mensajería")
                 .font(.system(size: 13, weight: .bold))
@@ -224,9 +378,122 @@ struct AddAccountSheet: View {
                 } else {
                     SecureField("Contraseña:", text: $password)
                         .font(.system(size: 11))
+                    
+                    DisclosureGroup("Opciones Avanzadas (Servidor, Puerto...)", isExpanded: $showAdvancedOptions) {
+                        TextField("Servidor (ej. jabber.org):", text: $server)
+                            .font(.system(size: 11))
+                        TextField("Puerto (ej. 5222):", text: $port)
+                            .font(.system(size: 11))
+                        TextField("Resource XMPP (ej. Adium):", text: $resource)
+                            .font(.system(size: 11))
+                        Toggle("Usar Conexión Segura (SSL/TLS)", isOn: $useSSL)
+                            .font(.system(size: 11))
+                    }
+                    .font(.system(size: 10, weight: .medium))
                 }
             }
             .formStyle(.grouped)
+            .onChange(of: selectedProtocol) { _, _ in
+                // Advanced options are protocol-specific (e.g. XMPP server/port/resource);
+                // stale values must not silently carry over to a newly selected protocol.
+                server = ""
+                port = ""
+                resource = ""
+                useSSL = true
+                showAdvancedOptions = false
+            }
+
+            HStack {
+                Button("Cancelar") {
+                    isPresented = false
+                }
+                .keyboardShortcut(.cancelAction)
+
+                Spacer()
+
+                Button("Conectar") {
+                    let trimmedUser = username.trimmingCharacters(in: .whitespacesAndNewlines)
+                    guard !trimmedUser.isEmpty else { return }
+                    let pass = (selectedProtocol == .teams || selectedProtocol == .whatsapp) ? "" : password
+                    let pInt = Int(port.trimmingCharacters(in: .whitespacesAndNewlines))
+                    bridge.connectAccount(
+                        username: trimmedUser,
+                        protocolType: selectedProtocol,
+                        password: pass,
+                        server: server.isEmpty ? nil : server,
+                        port: pInt,
+                        resource: resource.isEmpty ? nil : resource,
+                        useSSL: useSSL
+                    )
+                    isPresented = false
+                }
+                .keyboardShortcut(.defaultAction)
+                .disabled(!isFormValid)
+            }
+        }
+        .padding(16)
+        .frame(width: 400, height: (selectedProtocol == .teams || selectedProtocol == .whatsapp) ? 260 : (showAdvancedOptions ? 380 : 250))
+    }
+}
+
+public struct AccountOptionsSheet: View {
+    let account: Account
+    @Binding var isPresented: Bool
+    @Bindable var bridge = PurpleBridgeService.shared
+    
+    @State private var server: String = ""
+    @State private var port: String = ""
+    @State private var resource: String = ""
+    @State private var useSSL: Bool = true
+    @State private var customOptionsText: String = ""
+    
+    public var body: some View {
+        VStack(spacing: 14) {
+            HStack {
+                Image(systemName: account.accountProtocol.iconName)
+                    .font(.system(size: 16))
+                    .foregroundColor(.accentColor)
+                VStack(alignment: .leading, spacing: 2) {
+                    Text("Opciones Avanzadas por Servicio")
+                        .font(.system(size: 13, weight: .bold))
+                    Text("\(account.username) (\(account.accountProtocol.rawValue))")
+                        .font(.system(size: 10))
+                        .foregroundColor(.secondary)
+                }
+                Spacer()
+            }
+            
+            Form {
+                Section(header: Text("Servidor y Conexión").font(.system(size: 10, weight: .bold))) {
+                    TextField("Servidor (Server host):", text: $server)
+                        .font(.system(size: 11))
+                    TextField("Puerto:", text: $port)
+                        .font(.system(size: 11))
+                    TextField("Resource / Identificador:", text: $resource)
+                        .font(.system(size: 11))
+                    Toggle("Usar Conexión Segura (SSL/TLS)", isOn: $useSSL)
+                        .font(.system(size: 11))
+                }
+                
+                Section(header: Text("Opciones Libpurple Extra (clave=valor por línea)").font(.system(size: 10, weight: .bold))) {
+                    TextEditor(text: $customOptionsText)
+                        .font(.system(size: 10, design: .monospaced))
+                        .frame(height: 60)
+                }
+            }
+            .formStyle(.grouped)
+            .onAppear {
+                server = account.server ?? ""
+                port = account.port.map { String($0) } ?? ""
+                resource = account.resource ?? ""
+                useSSL = account.useSSL ?? true
+                
+                var lines: [String] = []
+                for (k, v) in account.customOptions {
+                    lines.append("\(k)=\(v)")
+                }
+                customOptionsText = lines.joined(separator: "\n")
+            }
             
             HStack {
                 Button("Cancelar") {
@@ -236,18 +503,150 @@ struct AddAccountSheet: View {
                 
                 Spacer()
                 
-                Button("Conectar") {
-                    let trimmedUser = username.trimmingCharacters(in: .whitespacesAndNewlines)
-                    guard !trimmedUser.isEmpty else { return }
-                    let pass = (selectedProtocol == .teams || selectedProtocol == .whatsapp) ? "" : password
-                    bridge.connectAccount(username: trimmedUser, protocolType: selectedProtocol, password: pass)
+                Button("Guardar Cambios") {
+                    let parsedPort = Int(port.trimmingCharacters(in: .whitespacesAndNewlines))
+                    var optionsDict: [String: String] = [:]
+                    let lines = customOptionsText.components(separatedBy: .newlines)
+                    for line in lines {
+                        let parts = line.split(separator: "=", maxSplits: 1).map { String($0).trimmingCharacters(in: .whitespacesAndNewlines) }
+                        if parts.count == 2 && !parts[0].isEmpty {
+                            optionsDict[parts[0]] = parts[1]
+                        }
+                    }
+                    
+                    bridge.updateAccountOptions(
+                        accountID: account.id,
+                        server: server.isEmpty ? nil : server,
+                        port: parsedPort,
+                        resource: resource.isEmpty ? nil : resource,
+                        useSSL: useSSL,
+                        customOptions: optionsDict
+                    )
                     isPresented = false
                 }
                 .keyboardShortcut(.defaultAction)
-                .disabled(!isFormValid)
             }
         }
         .padding(16)
-        .frame(width: 380, height: (selectedProtocol == .teams || selectedProtocol == .whatsapp) ? 260 : 240)
+        .frame(width: 420, height: 380)
     }
 }
+
+public struct EventsPreferencesTab: View {
+    @Bindable var eventManager = EventManager.shared
+    
+    public init() {}
+    
+    public var body: some View {
+        ScrollView {
+            VStack(alignment: .leading, spacing: 14) {
+                Text("Motor de Eventos de Adium")
+                    .font(.system(size: 13, weight: .bold))
+                
+                Text("Configura cómo responde Adium a los eventos del sistema (sonidos, rebote del Dock y badges).")
+                    .font(.system(size: 11))
+                    .foregroundColor(.secondary)
+                
+                Divider()
+                
+                ForEach(AdiumEventType.allCases) { eventType in
+                    if let rule = eventManager.rules[eventType] {
+                        EventRuleConfigRow(rule: rule) { updatedRule in
+                            eventManager.updateRule(updatedRule)
+                        }
+                        Divider()
+                    }
+                }
+            }
+            .padding(16)
+        }
+    }
+}
+
+struct EventRuleConfigRow: View {
+    let rule: EventRule
+    let onUpdate: (EventRule) -> Void
+    
+    @State var playSound: Bool = true
+    @State var soundName: String = "Tink"
+    @State var bounceDock: Bool = false
+    @State var updateBadge: Bool = false
+    @State var showNotification: Bool = true
+    
+    var body: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            HStack {
+                Text(rule.eventType.rawValue)
+                    .font(.system(size: 11, weight: .bold))
+                
+                Spacer()
+                
+                Button(action: {
+                    EventManager.shared.triggerEvent(
+                        rule.eventType,
+                        title: "Prueba: \(rule.eventType.rawValue)",
+                        content: "Prueba de sonido y reacción del evento."
+                    )
+                }) {
+                    Label("Probar Evento", systemImage: "play.fill")
+                        .font(.system(size: 9))
+                }
+                .buttonStyle(.bordered)
+                .controlSize(.mini)
+            }
+            
+            Grid(alignment: .leading, horizontalSpacing: 16, verticalSpacing: 6) {
+                GridRow {
+                    Toggle("Reproducir sonido", isOn: $playSound)
+                        .font(.system(size: 11))
+                    
+                    if playSound {
+                        Picker("Efecto:", selection: $soundName) {
+                            ForEach(EventManager.availableSounds, id: \.self) { sound in
+                                Text(sound).tag(sound)
+                            }
+                        }
+                        .font(.system(size: 10))
+                        .frame(width: 150)
+                    }
+                }
+                
+                GridRow {
+                    Toggle("Rebote de icono en Dock", isOn: $bounceDock)
+                        .font(.system(size: 11))
+                    
+                    Toggle("Contador Badge en Dock", isOn: $updateBadge)
+                        .font(.system(size: 11))
+                }
+                
+                GridRow {
+                    Toggle("Notificación de macOS", isOn: $showNotification)
+                        .font(.system(size: 11))
+                }
+            }
+        }
+        .onAppear {
+            playSound = rule.playSound
+            soundName = rule.soundName
+            bounceDock = rule.bounceDock
+            updateBadge = rule.updateBadge
+            showNotification = rule.showNotification
+        }
+        .onChange(of: playSound) { _, _ in save() }
+        .onChange(of: soundName) { _, _ in save() }
+        .onChange(of: bounceDock) { _, _ in save() }
+        .onChange(of: updateBadge) { _, _ in save() }
+        .onChange(of: showNotification) { _, _ in save() }
+    }
+    
+    private func save() {
+        var updated = rule
+        updated.playSound = playSound
+        updated.soundName = soundName
+        updated.bounceDock = bounceDock
+        updated.updateBadge = updateBadge
+        updated.showNotification = showNotification
+        onUpdate(updated)
+    }
+}
+

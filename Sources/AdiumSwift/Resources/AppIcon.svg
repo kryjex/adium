@@ -1,0 +1,69 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1024" height="1024" viewBox="0 0 1024 1024">
+  <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#F4FBEE"/>
+      <stop offset="1" stop-color="#CDEAC2"/>
+    </linearGradient>
+    <linearGradient id="duck" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#8DC63F"/>
+      <stop offset="1" stop-color="#5E9E2E"/>
+    </linearGradient>
+    <linearGradient id="beak" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#FFB03B"/>
+      <stop offset="1" stop-color="#F07F1A"/>
+    </linearGradient>
+  </defs>
+
+  <!-- macOS squircle background -->
+  <rect x="0" y="0" width="1024" height="1024" fill="url(#bg)"/>
+
+  <g>
+    <!-- ground shadow -->
+    <ellipse cx="512" cy="864" rx="235" ry="30" fill="#3E6B1E" opacity="0.11"/>
+
+    <!-- body -->
+    <path d="M 254 700
+             C 254 560 360 500 512 500
+             C 664 500 770 560 770 700
+             C 770 800 660 862 512 862
+             C 364 862 254 800 254 700 Z" fill="url(#duck)"/>
+    <!-- belly highlight -->
+    <ellipse cx="512" cy="730" rx="152" ry="98" fill="#9ED45B" opacity="0.5"/>
+    <!-- wings: soft crescents inside the body -->
+    <path d="M 316 618 C 282 668 284 738 322 786 C 344 740 344 668 336 622 Z" fill="#55932A" opacity="0.45"/>
+    <path d="M 708 618 C 742 668 740 738 702 786 C 680 740 680 668 688 622 Z" fill="#55932A" opacity="0.45"/>
+
+    <!-- head tuft: soft messy fluff, slightly off-center like the classic duck -->
+    <path d="M 436 262
+             C 430 218 452 200 462 232
+             C 470 196 502 186 504 226
+             C 516 192 548 196 546 234
+             C 566 210 588 224 576 258
+             Z" fill="#6DAF35"/>
+
+    <!-- head (drawn after body so the neck merges smoothly) -->
+    <circle cx="512" cy="418" r="180" fill="url(#duck)"/>
+
+    <!-- eyes -->
+    <ellipse cx="441" cy="382" rx="55" ry="66" fill="#FFFFFF"/>
+    <ellipse cx="583" cy="382" rx="55" ry="66" fill="#FFFFFF"/>
+    <circle cx="450" cy="402" r="21" fill="#20262B"/>
+    <circle cx="574" cy="402" r="21" fill="#20262B"/>
+    <circle cx="456" cy="394" r="7" fill="#FFFFFF"/>
+    <circle cx="580" cy="394" r="7" fill="#FFFFFF"/>
+
+    <!-- bill -->
+    <ellipse cx="512" cy="528" rx="72" ry="28" fill="#D96D12"/>
+    <ellipse cx="512" cy="500" rx="96" ry="42" fill="url(#beak)"/>
+    <path d="M 430 508 Q 512 540 594 508" stroke="#D96D12" stroke-width="7" fill="none" stroke-linecap="round"/>
+  </g>
+
+  <!-- speech bubble -->
+  <g>
+    <path d="M 700 348 L 668 402 L 736 362 Z" fill="#FFFFFF"/>
+    <circle cx="756" cy="256" r="96" fill="#FFFFFF"/>
+    <circle cx="714" cy="256" r="14" fill="#6DAF35"/>
+    <circle cx="756" cy="256" r="14" fill="#6DAF35"/>
+    <circle cx="798" cy="256" r="14" fill="#6DAF35"/>
+  </g>
+</svg>

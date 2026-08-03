@@ -18,6 +18,104 @@ static adium_purple_on_message_cb g_message_cb = NULL;
 static adium_purple_on_status_cb g_status_cb = NULL;
 static adium_purple_on_account_state_cb g_account_state_cb = NULL;
 
+static adium_purple_on_request_input_cb g_request_input_cb = NULL;
+static adium_purple_on_request_action_cb g_request_action_cb = NULL;
+static adium_purple_on_request_close_cb g_request_close_cb = NULL;
+static adium_purple_on_connection_progress_cb g_connection_progress_cb = NULL;
+static adium_purple_on_typing_cb g_typing_cb = NULL;
+static adium_purple_on_buddy_removed_cb g_buddy_removed_cb = NULL;
+
+static adium_purple_on_xfer_new_cb g_xfer_new_cb = NULL;
+static adium_purple_on_xfer_update_cb g_xfer_update_cb = NULL;
+static adium_purple_on_xfer_cancel_cb g_xfer_cancel_cb = NULL;
+static adium_purple_on_xfer_destroyed_cb g_xfer_destroyed_cb = NULL;
+
+static adium_purple_on_chat_joined_cb g_chat_joined_cb = NULL;
+static adium_purple_on_chat_left_cb g_chat_left_cb = NULL;
+static adium_purple_on_chat_message_cb g_chat_message_cb = NULL;
+static adium_purple_on_chat_buddy_joined_cb g_chat_buddy_joined_cb = NULL;
+static adium_purple_on_chat_buddy_left_cb g_chat_buddy_left_cb = NULL;
+
+/* Live PurpleXfer* set, only touched on the purple thread (new_xfer/destroy are UI ops
+ * invoked by libpurple itself; do_xfer_accept/do_xfer_cancel run via g_idle_add). Guards
+ * against Swift holding a raw pointer to a transfer libpurple already freed. */
+static GHashTable *g_live_xfers = NULL;
+
+static void ensure_live_xfers_table(void) {
+    if (!g_live_xfers) {
+        g_live_xfers = g_hash_table_new(NULL, NULL);
+    }
+}
+
+/* --- File Transfer UI Ops --- */
+
+static void adium_xfer_new_xfer(PurpleXfer *xfer) {
+    if (!xfer) return;
+    /* Take our own reference so the xfer can't be freed while Swift holds its address;
+     * released in adium_xfer_destroy (mirrors Pidgin's gtkft.c ref/unref pairing). */
+    purple_xfer_ref(xfer);
+    ensure_live_xfers_table();
+    g_hash_table_add(g_live_xfers, xfer);
+
+    PurpleXferType type = purple_xfer_get_type(xfer);
+    bool is_incoming = (type == PURPLE_XFER_RECEIVE);
+    const char *who = purple_xfer_get_remote_user(xfer);
+    const char *filename = purple_xfer_get_filename(xfer);
+    size_t size = purple_xfer_get_size(xfer);
+    if (g_xfer_new_cb) {
+        g_xfer_new_cb((void*)xfer, who ? who : "", filename ? filename : "", size, is_incoming);
+    }
+}
+
+static void adium_xfer_destroy(PurpleXfer *xfer) {
+    if (!xfer) return;
+    if (g_live_xfers) {
+        g_hash_table_remove(g_live_xfers, xfer);
+    }
+    if (g_xfer_destroyed_cb) {
+        g_xfer_destroyed_cb((void*)xfer);
+    }
+    purple_xfer_unref(xfer);
+}
+
+static void adium_xfer_update_progress(PurpleXfer *xfer, double percent) {
+    (void)percent;
+    if (!xfer) return;
+    size_t bytes_sent = purple_xfer_get_bytes_sent(xfer);
+    size_t size = purple_xfer_get_size(xfer);
+    PurpleXferStatusType status = purple_xfer_get_status(xfer);
+    if (g_xfer_update_cb) {
+        g_xfer_update_cb((void*)xfer, bytes_sent, size, (int)status);
+    }
+}
+
+static void adium_xfer_cancel_local(PurpleXfer *xfer) {
+    if (!xfer) return;
+    if (g_xfer_cancel_cb) {
+        g_xfer_cancel_cb((void*)xfer, true);
+    }
+}
+
+static void adium_xfer_cancel_remote(PurpleXfer *xfer) {
+    if (!xfer) return;
+    if (g_xfer_cancel_cb) {
+        g_xfer_cancel_cb((void*)xfer, false);
+    }
+}
+
+static PurpleXferUiOps xfer_ui_ops = {
+    .new_xfer = adium_xfer_new_xfer,
+    .destroy = adium_xfer_destroy,
+    .add_xfer = NULL,
+    .update_progress = adium_xfer_update_progress,
+    .cancel_local = adium_xfer_cancel_local,
+    .cancel_remote = adium_xfer_cancel_remote,
+    .ui_write = NULL,
+    .ui_read = NULL,
+    .data_not_sent = NULL,
+    .add_thumbnail = NULL
+};
+
 /* --- GLib Eventloop UI Ops --- */
 
 static guint glib_timeout_add(guint interval, GSourceFunc function, gpointer data) {
@@ -135,6 +233,176 @@ static PurpleNotifyUiOps notify_ui_ops = {
     ._purple_reserved4 = NULL
 };
 
+/* --- Request & Connection UI Ops --- */
+
+typedef struct {
+    PurpleRequestType type;
+    GCallback ok_cb;
+    GCallback cancel_cb;
+    void *user_data;
+    PurpleAccount *account;
+    size_t action_count;
+    GCallback *action_cbs;
+} AdiumRequestHandle;
+
+/* Live AdiumRequestHandle* set. adium_close_request is the single place that frees a
+ * handle; this lets stale respond ops (queued on the purple thread before a handle was
+ * closed by libpurple itself, e.g. via purple_request_close_with_handle on disconnect)
+ * detect that and become no-ops instead of touching freed memory. Only touched on the
+ * purple thread: request_input/request_action/close_request run there directly, and the
+ * respond entry points below marshal through g_idle_add before touching the set. */
+static GHashTable *g_live_requests = NULL;
+
+static void ensure_live_requests_table(void) {
+    if (!g_live_requests) {
+        g_live_requests = g_hash_table_new(NULL, NULL);
+    }
+}
+
+static void *adium_request_input(const char *title, const char *primary,
+                               const char *secondary, const char *default_value,
+                               gboolean multiline, gboolean masked, gchar *hint,
+                               const char *ok_text, GCallback ok_cb,
+                               const char *cancel_text, GCallback cancel_cb,
+                               PurpleAccount *account, const char *who,
+                               PurpleConversation *conv, void *user_data) {
+    (void)multiline; (void)ok_text; (void)cancel_text; (void)who; (void)conv;
+    AdiumRequestHandle *handle = g_new0(AdiumRequestHandle, 1);
+    handle->type = PURPLE_REQUEST_INPUT;
+    handle->ok_cb = ok_cb;
+    handle->cancel_cb = cancel_cb;
+    handle->user_data = user_data;
+    handle->account = account;
+
+    if (g_request_input_cb) {
+        ensure_live_requests_table();
+        g_hash_table_add(g_live_requests, handle);
+        g_request_input_cb((void*)handle, title, primary, secondary, default_value, masked, hint);
+    } else {
+        if (ok_cb) {
+            ((PurpleRequestInputCb)ok_cb)(user_data, default_value ? default_value : "");
+        }
+        g_free(handle);
+        return NULL;
+    }
+    return (void*)handle;
+}
+
+static void *adium_request_action(const char *title, const char *primary,
+                                const char *secondary, int default_action,
+                                PurpleAccount *account, const char *who,
+                                PurpleConversation *conv, void *user_data,
+                                size_t action_count, va_list actions) {
+    (void)who; (void)conv;
+    AdiumRequestHandle *handle = g_new0(AdiumRequestHandle, 1);
+    handle->type = PURPLE_REQUEST_ACTION;
+    handle->user_data = user_data;
+    handle->account = account;
+    handle->action_count = action_count;
+
+    const char **action_titles = g_new0(const char*, action_count + 1);
+    handle->action_cbs = g_new0(GCallback, action_count);
+
+    for (size_t i = 0; i < action_count; i++) {
+        action_titles[i] = va_arg(actions, const char *);
+        handle->action_cbs[i] = va_arg(actions, GCallback);
+    }
+
+    if (g_request_action_cb) {
+        ensure_live_requests_table();
+        g_hash_table_add(g_live_requests, handle);
+        g_request_action_cb((void*)handle, title, primary, secondary, default_action, action_titles, (int)action_count);
+    } else {
+        if (default_action >= 0 && (size_t)default_action < action_count && handle->action_cbs[default_action]) {
+            ((PurpleRequestActionCb)handle->action_cbs[default_action])(user_data, default_action);
+        }
+        g_free(action_titles);
+        g_free(handle->action_cbs);
+        g_free(handle);
+        return NULL;
+    }
+    g_free(action_titles);
+    return (void*)handle;
+}
+
+static void *adium_request_action_with_icon(const char *title, const char *primary,
+                                          const char *secondary, int default_action,
+                                          PurpleAccount *account, const char *who,
+                                          PurpleConversation *conv,
+                                          gconstpointer icon_data, gsize icon_size,
+                                          void *user_data,
+                                          size_t action_count, va_list actions) {
+    (void)icon_data; (void)icon_size;
+    return adium_request_action(title, primary, secondary, default_action, account, who, conv, user_data, action_count, actions);
+}
+
+static void adium_close_request(PurpleRequestType type, void *ui_handle) {
+    (void)type;
+    if (!ui_handle) return;
+    /* Single place a handle is removed from the live set and freed, whether we got here
+     * via our own respond ops (below) or libpurple closing the request out from under us
+     * (e.g. purple_request_close_with_handle on disconnect). If it's already gone, this
+     * is a race we lost gracefully rather than a double free. */
+    if (!g_live_requests || !g_hash_table_contains(g_live_requests, ui_handle)) {
+        return;
+    }
+    g_hash_table_remove(g_live_requests, ui_handle);
+    AdiumRequestHandle *handle = (AdiumRequestHandle *)ui_handle;
+    if (g_request_close_cb) {
+        g_request_close_cb((void*)handle);
+    }
+    if (handle->action_cbs) {
+        g_free(handle->action_cbs);
+    }
+    g_free(handle);
+}
+
+static PurpleRequestUiOps request_ui_ops = {
+    .request_input = adium_request_input,
+    .request_choice = NULL,
+    .request_action = adium_request_action,
+    .request_fields = NULL,
+    .request_file = NULL,
+    .close_request = adium_close_request,
+    .request_folder = NULL,
+    .request_action_with_icon = adium_request_action_with_icon,
+    ._purple_reserved1 = NULL,
+    ._purple_reserved2 = NULL
+};
+
+static void update_status(const char* fmt, ...);
+
+static void adium_connection_connect_progress(PurpleConnection *gc, const char *text, size_t step, size_t step_count) {
+    if (!gc) return;
+    PurpleAccount *account = purple_connection_get_account(gc);
+    if (!account) return;
+    const char *username = purple_account_get_username(account);
+    const char *proto_id = purple_account_get_protocol_id(account);
+
+    update_status("Conectando %s (%s): %s (%zu/%zu)", username ? username : "", proto_id ? proto_id : "", text ? text : "", step, step_count);
+    if (g_connection_progress_cb && username && proto_id) {
+        g_connection_progress_cb(username, proto_id, text ? text : "", step, step_count);
+    }
+}
+
+/* connected/disconnected/report_disconnect_reason are intentionally left unset: the
+ * account-signed-on / account-signed-off / account-connection-error signals (connected
+ * below in adium_purple_init) already cover the same events, and wiring both here as well
+ * fired every connection state change twice into Swift. */
+static PurpleConnectionUiOps connection_ui_ops = {
+    .connect_progress = adium_connection_connect_progress,
+    .connected = NULL,
+    .disconnected = NULL,
+    .notice = NULL,
+    .report_disconnect = NULL,
+    .network_connected = NULL,
+    .network_disconnected = NULL,
+    .report_disconnect_reason = NULL,
+    ._purple_reserved1 = NULL,
+    ._purple_reserved2 = NULL,
+    ._purple_reserved3 = NULL
+};
+
 /* --- Signal Handlers --- */
 
 static void update_status(const char* fmt, ...) {
@@ -164,6 +432,29 @@ static void cb_sent_im_msg(PurpleAccount *account, const char *receiver, const c
     (void)account; (void)data;
     if (g_message_cb && receiver && message) {
         g_message_cb(receiver, message, true);
+    }
+}
+
+static void cb_buddy_typing(PurpleAccount *account, const char *name, void *data) {
+    (void)account; (void)data;
+    if (g_typing_cb && name) {
+        g_typing_cb(name, true);
+    }
+}
+
+static void cb_buddy_typing_stopped(PurpleAccount *account, const char *name, void *data) {
+    (void)account; (void)data;
+    if (g_typing_cb && name) {
+        g_typing_cb(name, false);
+    }
+}
+
+static void cb_buddy_removed(PurpleBuddy *buddy, void *data) {
+    (void)data;
+    if (!buddy || !g_buddy_removed_cb) return;
+    const char *handle = purple_buddy_get_name(buddy);
+    if (handle) {
+        g_buddy_removed_cb(handle);
     }
 }
 
@@ -223,6 +514,75 @@ static void cb_account_connection_error(PurpleAccount *account, PurpleConnection
     }
 }
 
+static void cb_chat_joined(PurpleConversation *conv, void *data) {
+    (void)data;
+    if (!conv) return;
+    PurpleAccount *account = purple_conversation_get_account(conv);
+    if (!account) return;
+    const char *room_name = purple_conversation_get_name(conv);
+    const char *username = purple_account_get_username(account);
+    const char *proto_id = purple_account_get_protocol_id(account);
+    if (g_chat_joined_cb && room_name && username && proto_id) {
+        g_chat_joined_cb(room_name, username, proto_id);
+    }
+}
+
+static void cb_chat_left(PurpleConversation *conv, void *data) {
+    (void)data;
+    if (!conv) return;
+    PurpleAccount *account = purple_conversation_get_account(conv);
+    if (!account) return;
+    const char *room_name = purple_conversation_get_name(conv);
+    const char *username = purple_account_get_username(account);
+    const char *proto_id = purple_account_get_protocol_id(account);
+    if (g_chat_left_cb && room_name && username && proto_id) {
+        g_chat_left_cb(room_name, username, proto_id);
+    }
+}
+
+/* Roster sync for a joined chat's occupants. When a chat is first joined, libpurple fires
+ * this once per existing occupant with new_arrival=FALSE (populating the initial roster);
+ * later, genuinely new joiners fire it with new_arrival=TRUE. We forward both cases and let
+ * Swift pass new_arrival through so it can decide whether to surface a join notification. */
+static void cb_chat_buddy_joined(PurpleConversation *conv, const char *name, PurpleConvChatBuddyFlags flags, gboolean new_arrival, void *data) {
+    (void)flags; (void)data;
+    if (!conv || !name) return;
+    const char *room_name = purple_conversation_get_name(conv);
+    if (g_chat_buddy_joined_cb && room_name) {
+        g_chat_buddy_joined_cb(room_name, name, (bool)new_arrival);
+    }
+}
+
+static void cb_chat_buddy_left(PurpleConversation *conv, const char *name, const char *reason, void *data) {
+    (void)reason; (void)data;
+    if (!conv || !name) return;
+    const char *room_name = purple_conversation_get_name(conv);
+    if (g_chat_buddy_left_cb && room_name) {
+        g_chat_buddy_left_cb(room_name, name);
+    }
+}
+
+static void cb_received_chat_msg(PurpleAccount *account, char *sender, char *message, PurpleConversation *conv, PurpleMessageFlags flags, void *data) {
+    (void)account; (void)flags; (void)data;
+    if (!conv || !message) return;
+    const char *room_name = purple_conversation_get_name(conv);
+    if (g_chat_message_cb && room_name) {
+        g_chat_message_cb(room_name, sender ? sender : "", message, false);
+    }
+}
+
+static void cb_sent_chat_msg(PurpleAccount *account, const char *message, int id, void *data) {
+    (void)data;
+    if (!account || !message) return;
+    PurpleConnection *gc = purple_account_get_connection(account);
+    PurpleConversation *conv = gc ? purple_find_chat(gc, id) : NULL;
+    const char *room_name = conv ? purple_conversation_get_name(conv) : NULL;
+    const char *username = purple_account_get_username(account);
+    if (g_chat_message_cb && room_name) {
+        g_chat_message_cb(room_name, username ? username : "", message, true);
+    }
+}
+
 /* --- GLib Main Loop Thread --- */
 
 static void* event_loop_thread(void* arg) {
@@ -257,6 +617,9 @@ bool adium_purple_init(const char* custom_plugin_dir, const char* user_dir) {
     purple_debug_set_ui_ops(&debug_ui_ops);
     purple_core_set_ui_ops(&core_ui_ops);
     purple_notify_set_ui_ops(&notify_ui_ops);
+    purple_request_set_ui_ops(&request_ui_ops);
+    purple_connections_set_ui_ops(&connection_ui_ops);
+    purple_xfers_set_ui_ops(&xfer_ui_ops);
 
     if (custom_plugin_dir && custom_plugin_dir[0] != '\0') {
         purple_plugins_add_search_path(custom_plugin_dir);
@@ -273,11 +636,20 @@ bool adium_purple_init(const char* custom_plugin_dir, const char* user_dir) {
     void *conv_handle = purple_conversations_get_handle();
     purple_signal_connect(conv_handle, "received-im-msg", &adium_signal_handle, PURPLE_CALLBACK(cb_received_im_msg), NULL);
     purple_signal_connect(conv_handle, "sent-im-msg", &adium_signal_handle, PURPLE_CALLBACK(cb_sent_im_msg), NULL);
+    purple_signal_connect(conv_handle, "buddy-typing", &adium_signal_handle, PURPLE_CALLBACK(cb_buddy_typing), NULL);
+    purple_signal_connect(conv_handle, "buddy-typing-stopped", &adium_signal_handle, PURPLE_CALLBACK(cb_buddy_typing_stopped), NULL);
+    purple_signal_connect(conv_handle, "chat-joined", &adium_signal_handle, PURPLE_CALLBACK(cb_chat_joined), NULL);
+    purple_signal_connect(conv_handle, "chat-left", &adium_signal_handle, PURPLE_CALLBACK(cb_chat_left), NULL);
+    purple_signal_connect(conv_handle, "chat-buddy-joined", &adium_signal_handle, PURPLE_CALLBACK(cb_chat_buddy_joined), NULL);
+    purple_signal_connect(conv_handle, "chat-buddy-left", &adium_signal_handle, PURPLE_CALLBACK(cb_chat_buddy_left), NULL);
+    purple_signal_connect(conv_handle, "received-chat-msg", &adium_signal_handle, PURPLE_CALLBACK(cb_received_chat_msg), NULL);
+    purple_signal_connect(conv_handle, "sent-chat-msg", &adium_signal_handle, PURPLE_CALLBACK(cb_sent_chat_msg), NULL);
 
     void *blist_handle = purple_blist_get_handle();
     purple_signal_connect(blist_handle, "buddy-signed-on", &adium_signal_handle, PURPLE_CALLBACK(cb_buddy_signed_on_off), NULL);
     purple_signal_connect(blist_handle, "buddy-signed-off", &adium_signal_handle, PURPLE_CALLBACK(cb_buddy_signed_on_off), NULL);
     purple_signal_connect(blist_handle, "buddy-status-changed", &adium_signal_handle, PURPLE_CALLBACK(cb_buddy_status_changed), NULL);
+    purple_signal_connect(blist_handle, "buddy-removed", &adium_signal_handle, PURPLE_CALLBACK(cb_buddy_removed), NULL);
 
     void *accounts_handle = purple_accounts_get_handle();
     purple_signal_connect(accounts_handle, "account-signed-on", &adium_signal_handle, PURPLE_CALLBACK(cb_account_signed_on), NULL);
@@ -352,6 +724,94 @@ void adium_purple_set_event_callbacks(
     g_message_cb = message_cb;
     g_status_cb = status_cb;
     g_account_state_cb = account_state_cb;
+}
+
+void adium_purple_set_extended_event_callbacks(
+    adium_purple_on_request_input_cb request_input_cb,
+    adium_purple_on_request_action_cb request_action_cb,
+    adium_purple_on_request_close_cb request_close_cb,
+    adium_purple_on_connection_progress_cb connection_progress_cb,
+    adium_purple_on_typing_cb typing_cb,
+    adium_purple_on_buddy_removed_cb buddy_removed_cb
+) {
+    g_request_input_cb = request_input_cb;
+    g_request_action_cb = request_action_cb;
+    g_request_close_cb = request_close_cb;
+    g_connection_progress_cb = connection_progress_cb;
+    g_typing_cb = typing_cb;
+    g_buddy_removed_cb = buddy_removed_cb;
+}
+
+typedef struct {
+    void *handle;
+    char *input_text;
+    bool ok;
+} RequestInputRespondData;
+
+/* Runs on the purple thread. Re-checks liveness here (not just at the Swift call site)
+ * because the handle may have been closed by libpurple between the respond call being
+ * made and this idle callback actually running. */
+static gboolean do_request_input_respond(gpointer user_data) {
+    RequestInputRespondData *data = (RequestInputRespondData *)user_data;
+    if (!data) return G_SOURCE_REMOVE;
+    if (g_live_requests && g_hash_table_contains(g_live_requests, data->handle)) {
+        AdiumRequestHandle *handle = (AdiumRequestHandle *)data->handle;
+        if (data->ok && handle->ok_cb) {
+            ((PurpleRequestInputCb)handle->ok_cb)(handle->user_data, data->input_text ? data->input_text : "");
+        } else if (!data->ok && handle->cancel_cb) {
+            ((PurpleRequestInputCb)handle->cancel_cb)(handle->user_data, NULL);
+        }
+        /* purple_request_close routes through adium_close_request, the single place
+         * that removes the handle from the live set and frees it. */
+        purple_request_close(handle->type, handle);
+    }
+    g_free(data->input_text);
+    g_free(data);
+    return G_SOURCE_REMOVE;
+}
+
+void adium_purple_request_input_respond(void* request_handle, const char* input_text, bool ok) {
+    if (!request_handle) return;
+    RequestInputRespondData *data = g_new0(RequestInputRespondData, 1);
+    data->handle = request_handle;
+    data->input_text = input_text ? g_strdup(input_text) : NULL;
+    data->ok = ok;
+    if (g_loop) {
+        g_idle_add(do_request_input_respond, data);
+    } else {
+        do_request_input_respond(data);
+    }
+}
+
+typedef struct {
+    void *handle;
+    int action_index;
+} RequestActionRespondData;
+
+static gboolean do_request_action_respond(gpointer user_data) {
+    RequestActionRespondData *data = (RequestActionRespondData *)user_data;
+    if (!data) return G_SOURCE_REMOVE;
+    if (g_live_requests && g_hash_table_contains(g_live_requests, data->handle)) {
+        AdiumRequestHandle *handle = (AdiumRequestHandle *)data->handle;
+        if (data->action_index >= 0 && (size_t)data->action_index < handle->action_count && handle->action_cbs[data->action_index]) {
+            ((PurpleRequestActionCb)handle->action_cbs[data->action_index])(handle->user_data, data->action_index);
+        }
+        purple_request_close(handle->type, handle);
+    }
+    g_free(data);
+    return G_SOURCE_REMOVE;
+}
+
+void adium_purple_request_action_respond(void* request_handle, int action_index) {
+    if (!request_handle) return;
+    RequestActionRespondData *data = g_new0(RequestActionRespondData, 1);
+    data->handle = request_handle;
+    data->action_index = action_index;
+    if (g_loop) {
+        g_idle_add(do_request_action_respond, data);
+    } else {
+        do_request_action_respond(data);
+    }
 }
 
 /* Thread-safe account addition */
@@ -550,6 +1010,7 @@ void adium_purple_uninit(void) {
 
 typedef struct {
     char *status_id;
+    char *message;
 } SetStatusData;
 
 static gboolean do_set_user_status(gpointer user_data) {
@@ -569,19 +1030,24 @@ static gboolean do_set_user_status(gpointer user_data) {
 
     PurpleSavedStatus *status = purple_savedstatus_new(NULL, type);
     if (status) {
+        if (data->message && data->message[0] != '\0') {
+            purple_savedstatus_set_message(status, data->message);
+        }
         purple_savedstatus_activate(status);
         update_status("Estado actualizado: %s", data->status_id);
     }
 
     g_free(data->status_id);
+    g_free(data->message);
     g_free(data);
     return G_SOURCE_REMOVE;
 }
 
-bool adium_purple_set_user_status(const char* status_id) {
+bool adium_purple_set_user_status(const char* status_id, const char* message) {
     if (!status_id) return false;
     SetStatusData *data = g_new0(SetStatusData, 1);
     data->status_id = g_strdup(status_id);
+    data->message = (message && message[0] != '\0') ? g_strdup(message) : NULL;
     if (g_loop) {
         g_idle_add(do_set_user_status, data);
     } else {
@@ -589,4 +1055,409 @@ bool adium_purple_set_user_status(const char* status_id) {
     }
     return true;
 }
+
+typedef struct {
+    char *username;
+    char *protocol_id;
+    char *key;
+    char *value;
+    int int_value;
+    bool is_int;
+    bool is_bool;
+    bool bool_value;
+} SetAccountOptionData;
+
+static gboolean do_set_account_option(gpointer user_data) {
+    SetAccountOptionData *data = (SetAccountOptionData *)user_data;
+    if (!data || !data->username || !data->protocol_id || !data->key) return G_SOURCE_REMOVE;
+
+    PurpleAccount *account = purple_accounts_find(data->username, data->protocol_id);
+    if (account) {
+        if (data->is_int) {
+            purple_account_set_int(account, data->key, data->int_value);
+        } else if (data->is_bool) {
+            purple_account_set_bool(account, data->key, data->bool_value);
+        } else {
+            purple_account_set_string(account, data->key, data->value);
+        }
+        update_status("Opción de cuenta actualizada: %s [%s]", data->username, data->key);
+    }
+
+    g_free(data->username);
+    g_free(data->protocol_id);
+    g_free(data->key);
+    g_free(data->value);
+    g_free(data);
+    return G_SOURCE_REMOVE;
+}
+
+bool adium_purple_set_account_option(const char* username, const char* protocol_id, const char* key, const char* value) {
+    if (!username || !protocol_id || !key) return false;
+    SetAccountOptionData *data = g_new0(SetAccountOptionData, 1);
+    data->username = g_strdup(username);
+    data->protocol_id = g_strdup(protocol_id);
+    data->key = g_strdup(key);
+    data->value = value ? g_strdup(value) : NULL;
+    data->is_int = false;
+    if (g_loop) {
+        g_idle_add(do_set_account_option, data);
+    } else {
+        do_set_account_option(data);
+    }
+    return true;
+}
+
+bool adium_purple_set_account_int_option(const char* username, const char* protocol_id, const char* key, int value) {
+    if (!username || !protocol_id || !key) return false;
+    SetAccountOptionData *data = g_new0(SetAccountOptionData, 1);
+    data->username = g_strdup(username);
+    data->protocol_id = g_strdup(protocol_id);
+    data->key = g_strdup(key);
+    data->int_value = value;
+    data->is_int = true;
+    if (g_loop) {
+        g_idle_add(do_set_account_option, data);
+    } else {
+        do_set_account_option(data);
+    }
+    return true;
+}
+
+bool adium_purple_set_account_bool_option(const char* username, const char* protocol_id, const char* key, bool value) {
+    if (!username || !protocol_id || !key) return false;
+    SetAccountOptionData *data = g_new0(SetAccountOptionData, 1);
+    data->username = g_strdup(username);
+    data->protocol_id = g_strdup(protocol_id);
+    data->key = g_strdup(key);
+    data->bool_value = value;
+    data->is_bool = true;
+    if (g_loop) {
+        g_idle_add(do_set_account_option, data);
+    } else {
+        do_set_account_option(data);
+    }
+    return true;
+}
+
+/* Thread-safe protocol-level privacy (block/unblock) */
+
+typedef struct {
+    char *username;
+    char *protocol_id;
+    char *who;
+} PrivacyData;
+
+static gboolean do_block_contact(gpointer user_data) {
+    PrivacyData *data = (PrivacyData *)user_data;
+    if (!data || !data->username || !data->protocol_id || !data->who) return G_SOURCE_REMOVE;
+
+    PurpleAccount *account = purple_accounts_find(data->username, data->protocol_id);
+    if (account) {
+        if (purple_account_get_privacy_type(account) == PURPLE_PRIVACY_ALLOW_ALL) {
+            purple_account_set_privacy_type(account, PURPLE_PRIVACY_DENY_USERS);
+        }
+        purple_privacy_deny_add(account, data->who, FALSE);
+        update_status("Contacto bloqueado: %s", data->who);
+    }
+
+    g_free(data->username);
+    g_free(data->protocol_id);
+    g_free(data->who);
+    g_free(data);
+    return G_SOURCE_REMOVE;
+}
+
+bool adium_purple_block_contact(const char* username, const char* protocol_id, const char* who) {
+    if (!username || !protocol_id || !who) return false;
+    PrivacyData *data = g_new0(PrivacyData, 1);
+    data->username = g_strdup(username);
+    data->protocol_id = g_strdup(protocol_id);
+    data->who = g_strdup(who);
+    if (g_loop) {
+        g_idle_add(do_block_contact, data);
+    } else {
+        do_block_contact(data);
+    }
+    return true;
+}
+
+static gboolean do_unblock_contact(gpointer user_data) {
+    PrivacyData *data = (PrivacyData *)user_data;
+    if (!data || !data->username || !data->protocol_id || !data->who) return G_SOURCE_REMOVE;
+
+    PurpleAccount *account = purple_accounts_find(data->username, data->protocol_id);
+    if (account) {
+        purple_privacy_deny_remove(account, data->who, FALSE);
+        update_status("Contacto desbloqueado: %s", data->who);
+    }
+
+    g_free(data->username);
+    g_free(data->protocol_id);
+    g_free(data->who);
+    g_free(data);
+    return G_SOURCE_REMOVE;
+}
+
+bool adium_purple_unblock_contact(const char* username, const char* protocol_id, const char* who) {
+    if (!username || !protocol_id || !who) return false;
+    PrivacyData *data = g_new0(PrivacyData, 1);
+    data->username = g_strdup(username);
+    data->protocol_id = g_strdup(protocol_id);
+    data->who = g_strdup(who);
+    if (g_loop) {
+        g_idle_add(do_unblock_contact, data);
+    } else {
+        do_unblock_contact(data);
+    }
+    return true;
+}
+
+void adium_purple_set_xfer_callbacks(
+    adium_purple_on_xfer_new_cb xfer_new_cb,
+    adium_purple_on_xfer_update_cb xfer_update_cb,
+    adium_purple_on_xfer_cancel_cb xfer_cancel_cb,
+    adium_purple_on_xfer_destroyed_cb xfer_destroyed_cb
+) {
+    g_xfer_new_cb = xfer_new_cb;
+    g_xfer_update_cb = xfer_update_cb;
+    g_xfer_cancel_cb = xfer_cancel_cb;
+    g_xfer_destroyed_cb = xfer_destroyed_cb;
+}
+
+typedef struct {
+    void *xfer_handle;
+    char *local_path;
+} XferAcceptData;
+
+static gboolean do_xfer_accept(gpointer user_data) {
+    XferAcceptData *data = (XferAcceptData *)user_data;
+    if (!data || !data->xfer_handle) return G_SOURCE_REMOVE;
+    /* The handle crossed from Swift; libpurple may have already destroyed it. */
+    if (!g_live_xfers || !g_hash_table_contains(g_live_xfers, data->xfer_handle)) {
+        g_free(data->local_path);
+        g_free(data);
+        return G_SOURCE_REMOVE;
+    }
+    PurpleXfer *xfer = (PurpleXfer *)data->xfer_handle;
+    if (data->local_path && data->local_path[0] != '\0') {
+        purple_xfer_request_accepted(xfer, data->local_path);
+    } else {
+        purple_xfer_request_accepted(xfer, NULL);
+    }
+    g_free(data->local_path);
+    g_free(data);
+    return G_SOURCE_REMOVE;
+}
+
+bool adium_purple_xfer_accept(void* xfer_handle, const char* local_path) {
+    if (!xfer_handle) return false;
+    XferAcceptData *data = g_new0(XferAcceptData, 1);
+    data->xfer_handle = xfer_handle;
+    data->local_path = local_path ? g_strdup(local_path) : NULL;
+    if (g_loop) {
+        g_idle_add(do_xfer_accept, data);
+    } else {
+        do_xfer_accept(data);
+    }
+    return true;
+}
+
+typedef struct {
+    void *xfer_handle;
+} XferCancelData;
+
+static gboolean do_xfer_cancel(gpointer user_data) {
+    XferCancelData *data = (XferCancelData *)user_data;
+    if (!data || !data->xfer_handle) return G_SOURCE_REMOVE;
+    if (!g_live_xfers || !g_hash_table_contains(g_live_xfers, data->xfer_handle)) {
+        g_free(data);
+        return G_SOURCE_REMOVE;
+    }
+    PurpleXfer *xfer = (PurpleXfer *)data->xfer_handle;
+    purple_xfer_cancel_local(xfer);
+    g_free(data);
+    return G_SOURCE_REMOVE;
+}
+
+bool adium_purple_xfer_cancel(void* xfer_handle) {
+    if (!xfer_handle) return false;
+    XferCancelData *data = g_new0(XferCancelData, 1);
+    data->xfer_handle = xfer_handle;
+    if (g_loop) {
+        g_idle_add(do_xfer_cancel, data);
+    } else {
+        do_xfer_cancel(data);
+    }
+    return true;
+}
+
+typedef struct {
+    char *account_username;
+    char *protocol_id;
+    char *who;
+    char *filepath;
+} SendFileData;
+
+static gboolean do_send_file(gpointer user_data) {
+    SendFileData *data = (SendFileData *)user_data;
+    if (!data || !data->who || !data->filepath) return G_SOURCE_REMOVE;
+    PurpleAccount *account = NULL;
+    if (data->account_username && data->protocol_id && data->account_username[0] != '\0' && data->protocol_id[0] != '\0') {
+        account = purple_accounts_find(data->account_username, data->protocol_id);
+    }
+    if (!account) {
+        /* Do not fall back to an arbitrary account: sending a file from the wrong
+         * account is worse than not sending it at all. */
+        update_status("No se pudo enviar archivo: cuenta %s no encontrada", data->account_username ? data->account_username : "?");
+        g_free(data->account_username);
+        g_free(data->protocol_id);
+        g_free(data->who);
+        g_free(data->filepath);
+        g_free(data);
+        return G_SOURCE_REMOVE;
+    }
+    if (purple_account_get_connection(account)) {
+        serv_send_file(purple_account_get_connection(account), data->who, data->filepath);
+    }
+    g_free(data->account_username);
+    g_free(data->protocol_id);
+    g_free(data->who);
+    g_free(data->filepath);
+    g_free(data);
+    return G_SOURCE_REMOVE;
+}
+
+bool adium_purple_send_file(const char* account_username, const char* protocol_id, const char* who, const char* filepath) {
+    if (!who || !filepath) return false;
+    SendFileData *data = g_new0(SendFileData, 1);
+    data->account_username = account_username ? g_strdup(account_username) : NULL;
+    data->protocol_id = protocol_id ? g_strdup(protocol_id) : NULL;
+    data->who = g_strdup(who);
+    data->filepath = g_strdup(filepath);
+    if (g_loop) {
+        g_idle_add(do_send_file, data);
+    } else {
+        do_send_file(data);
+    }
+    return true;
+}
+
+void adium_purple_set_chat_callbacks(
+    adium_purple_on_chat_joined_cb chat_joined_cb,
+    adium_purple_on_chat_left_cb chat_left_cb,
+    adium_purple_on_chat_message_cb chat_message_cb,
+    adium_purple_on_chat_buddy_joined_cb chat_buddy_joined_cb,
+    adium_purple_on_chat_buddy_left_cb chat_buddy_left_cb
+) {
+    g_chat_joined_cb = chat_joined_cb;
+    g_chat_left_cb = chat_left_cb;
+    g_chat_message_cb = chat_message_cb;
+    g_chat_buddy_joined_cb = chat_buddy_joined_cb;
+    g_chat_buddy_left_cb = chat_buddy_left_cb;
+}
+
+/* Thread-safe group chat (MUC) join */
+
+typedef struct {
+    char *username;
+    char *protocol_id;
+    char *room_name;
+} JoinChatData;
+
+static gboolean do_join_chat(gpointer user_data) {
+    JoinChatData *data = (JoinChatData *)user_data;
+    if (!data || !data->username || !data->protocol_id || !data->room_name) return G_SOURCE_REMOVE;
+
+    PurpleAccount *account = purple_accounts_find(data->username, data->protocol_id);
+    PurpleConnection *gc = account ? purple_account_get_connection(account) : NULL;
+    if (gc) {
+        PurplePlugin *prpl = purple_connection_get_prpl(gc);
+        PurplePluginProtocolInfo *prpl_info = prpl ? PURPLE_PLUGIN_PROTOCOL_INFO(prpl) : NULL;
+        GHashTable *components = NULL;
+        if (prpl_info && prpl_info->chat_info_defaults) {
+            components = prpl_info->chat_info_defaults(gc, data->room_name);
+        }
+        if (!components) {
+            /* Fallback for protocols without chat_info_defaults: most prpls key their
+             * default chat-name component "room". */
+            components = g_hash_table_new_full(g_str_hash, g_str_equal, NULL, g_free);
+            g_hash_table_replace(components, "room", g_strdup(data->room_name));
+        }
+        serv_join_chat(gc, components);
+        g_hash_table_destroy(components);
+        update_status("Uniendose al grupo %s", data->room_name);
+    } else {
+        update_status("No se pudo unir al grupo %s: cuenta no conectada", data->room_name);
+    }
+
+    g_free(data->username);
+    g_free(data->protocol_id);
+    g_free(data->room_name);
+    g_free(data);
+    return G_SOURCE_REMOVE;
+}
+
+bool adium_purple_join_chat(const char* username, const char* protocol_id, const char* room_name) {
+    if (!username || !protocol_id || !room_name) return false;
+    JoinChatData *data = g_new0(JoinChatData, 1);
+    data->username = g_strdup(username);
+    data->protocol_id = g_strdup(protocol_id);
+    data->room_name = g_strdup(room_name);
+    if (g_loop) {
+        g_idle_add(do_join_chat, data);
+    } else {
+        do_join_chat(data);
+    }
+    return true;
+}
+
+typedef struct {
+    char *account_username;
+    char *protocol_id;
+    char *room_name;
+    char *message;
+} SendChatMessageData;
+
+static gboolean do_send_chat_message(gpointer user_data) {
+    SendChatMessageData *data = (SendChatMessageData *)user_data;
+    if (!data || !data->room_name || !data->message) return G_SOURCE_REMOVE;
+
+    PurpleAccount *account = NULL;
+    if (data->account_username && data->protocol_id && data->account_username[0] != '\0' && data->protocol_id[0] != '\0') {
+        account = purple_accounts_find(data->account_username, data->protocol_id);
+    }
+    if (account) {
+        PurpleConversation *conv = purple_find_conversation_with_account(PURPLE_CONV_TYPE_CHAT, data->room_name, account);
+        if (conv) {
+            purple_conv_chat_send(PURPLE_CONV_CHAT(conv), data->message);
+            update_status("Mensaje de grupo enviado a %s", data->room_name);
+        } else {
+            update_status("No se encontro la conversacion de grupo %s", data->room_name);
+        }
+    }
+
+    g_free(data->account_username);
+    g_free(data->protocol_id);
+    g_free(data->room_name);
+    g_free(data->message);
+    g_free(data);
+    return G_SOURCE_REMOVE;
+}
+
+bool adium_purple_send_chat_message(const char* account_username, const char* protocol_id, const char* room_name, const char* message_text) {
+    if (!room_name || !message_text) return false;
+    SendChatMessageData *data = g_new0(SendChatMessageData, 1);
+    data->account_username = account_username ? g_strdup(account_username) : NULL;
+    data->protocol_id = protocol_id ? g_strdup(protocol_id) : NULL;
+    data->room_name = g_strdup(room_name);
+    data->message = g_strdup(message_text);
+    if (g_loop) {
+        g_idle_add(do_send_chat_message, data);
+    } else {
+        do_send_chat_message(data);
+    }
+    return true;
+}
+
+
 

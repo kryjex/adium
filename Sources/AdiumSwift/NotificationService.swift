@@ -24,29 +24,29 @@ public final class NotificationService: NSObject, UNUserNotificationCenterDelega
         }
     }
     
-    /// Display a native macOS notification for incoming chat messages
-    public func notifyIncomingMessage(sender: String, content: String) {
+    /// Display a native macOS notification for incoming chat messages. `playSound`
+    /// mirrors the triggering EventRule so a sound-off rule stays silent — otherwise this
+    /// notification's own sound stacks on top of whatever EventManager.playSound already
+    /// played for the same event.
+    public func notifyIncomingMessage(sender: String, content: String, playSound: Bool = true) {
         self.lastNotification = (sender: sender, content: content)
-        
+
         guard Bundle.main.bundleIdentifier != nil else { return }
-        
+
         let notificationContent = UNMutableNotificationContent()
         notificationContent.title = sender
         notificationContent.body = content
-        notificationContent.sound = UNNotificationSound.default
-        
+        notificationContent.sound = playSound ? UNNotificationSound.default : nil
+
         let request = UNNotificationRequest(
             identifier: UUID().uuidString,
             content: notificationContent,
             trigger: nil // Deliver immediately
         )
-        
+
         UNUserNotificationCenter.current().add(request)
-        
-        // Play system tink sound
-        NSSound.beep()
     }
-    
+
     public func notifyIncomingMessage(senderName: String, messageText: String) {
         notifyIncomingMessage(sender: senderName, content: messageText)
     }
@@ -54,10 +54,11 @@ public final class NotificationService: NSObject, UNUserNotificationCenterDelega
     
     /// Play sound effect for sending a message
     public func playSendSound() {
-        NSSound(named: NSSound.Name("Pop"))?.play()
+        EventManager.shared.playSound(named: EventManager.shared.rules[.messageSent]?.soundName ?? "Pop")
     }
     
     public nonisolated func userNotificationCenter(_ center: UNUserNotificationCenter, willPresent notification: UNNotification, withCompletionHandler completionHandler: @escaping (UNNotificationPresentationOptions) -> Void) {
         completionHandler([.banner, .sound, .badge])
     }
 }
+
