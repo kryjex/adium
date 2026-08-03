@@ -1,3 +1,6 @@
-[submodule "Dependencies/MMTabBarView"]
-	path = Dependencies/MMTabBarView
-	url = https://github.com/adium/MMTabBarView.git
+[submodule "Plugins/purple-teams"]
+	path = Plugins/purple-teams
+	url = https://github.com/EionRobb/purple-teams.git
+[submodule "Plugins/purple-gowhatsapp"]
+	path = Plugins/purple-gowhatsapp
+	url = https://github.com/hoehermann/purple-gowhatsapp.git

@@ -6,6 +6,8 @@ syntax: glob
 *.xcworkspace
 *.xcuserdatad
 build
+.build/
+*.so
 Icon*
 Docs
 Dependencies/build

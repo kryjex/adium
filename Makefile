@@ -1,53 +1,50 @@
-PREFIX?=
-BUILD_DIR?=$(shell defaults read com.apple.Xcode PBXProductDirectory 2> /dev/null)
+CONFIGURATION?=release
+BUILD_DIR=build
+APP=$(BUILD_DIR)/Adium.app
+BIN_PATH=$(shell swift build -c $(CONFIGURATION) --show-bin-path)
+RESOURCE_BUNDLE=AdiumSwift_AdiumSwift.bundle
 
-ifeq ($(strip $(BUILD_DIR)),)
-	BUILD_DIR=build
-endif
+.PHONY: all build plugins app run install clean
 
-DEFAULT_BUILDCONFIGURATION=Release-Debug
+all: app
 
-BUILDCONFIGURATION?=$(DEFAULT_BUILDCONFIGURATION)
+build:
+	swift build -c $(CONFIGURATION)
 
-# Choose xcodebuild 
-# currently used for build machines
-# XCODEBUILD ?= $(shell if test -d /Xcode4; then echo "/Xcode4/usr/bin/xcodebuild"; else echo "xcodebuild"; fi)
-XCODEBUILD ?= xcodebuild
-#
+# purple-gowhatsapp's reference Makefile targets Linux; on macOS the Go runtime
+# additionally needs CoreFoundation/Security and libresolv at link time.
+GOWHATSAPP_LDFLAGS = $(shell pkg-config --libs glib-2.0 purple opusfile gdk-pixbuf-2.0) -framework CoreFoundation -framework Security -lresolv
 
-CP=ditto --rsrc
-RM=rm
+plugins:
+	$(MAKE) -C Plugins/purple-gowhatsapp libwhatsmeow.so CGO_LDFLAGS="$(GOWHATSAPP_LDFLAGS)"
+	for dir in Plugins/*/; do \
+		[ "$$dir" = "Plugins/purple-gowhatsapp/" ] && continue; \
+		if [ -f "$$dir/Makefile" ]; then $(MAKE) -C "$$dir" || exit 1; fi; \
+	done
 
-.PHONY: all adium clean localizable-strings latest test astest install
+app: build plugins
+	rm -rf $(APP)
+	mkdir -p $(APP)/Contents/MacOS $(APP)/Contents/Resources $(APP)/Contents/PlugIns
+	cp Packaging/Info.plist $(APP)/Contents/Info.plist
+	printf 'APPL????' > $(APP)/Contents/PkgInfo
+	cp $(BIN_PATH)/AdiumSwift $(APP)/Contents/MacOS/AdiumSwift
+	cp -R $(BIN_PATH)/$(RESOURCE_BUNDLE) $(APP)/Contents/Resources/
+	cp Sources/AdiumSwift/Resources/AppIcon.icns $(APP)/Contents/Resources/AppIcon.icns
+	for plugin in Plugins/*/*.so; do \
+		case "$$plugin" in Plugins/template/*) continue;; esac; \
+		if [ -f "$$plugin" ]; then cp "$$plugin" $(APP)/Contents/PlugIns/; fi; \
+	done
+	codesign --force --sign - $(APP)
+	@echo "Built $(APP)"
 
-adium:
-	$(XCODEBUILD) -version
-	$(XCODEBUILD) -project Adium.xcodeproj -configuration $(BUILDCONFIGURATION) CFLAGS="$(ADIUM_CFLAGS)" $(ADIUM_NIGHTLY_FLAGS) build
+run: app
+	open $(APP)
 
-test:
-	$(XCODEBUILD) -version
-	$(XCODEBUILD) -project Adium.xcodeproj -configuration $(BUILDCONFIGURATION) CFLAGS="$(ADIUM_CFLAGS)" $(ADIUM_NIGHTLY_FLAGS) -target "Unit tests" build
-astest:
-	osascript unittest\ runner.applescript | tr '\r' '\n'
-
-install:
+install: app
 	mkdir -p ~/Applications
-	cp -R build/$(BUILDCONFIGURATION)/Adium.app ~/Applications/
+	rm -rf ~/Applications/Adium.app
+	cp -R $(APP) ~/Applications/
 
 clean:
-	$(XCODEBUILD) -version
-	$(XCODEBUILD) -project Adium.xcodeproj -configuration $(BUILDCONFIGURATION) $(ADIUM_NIGHTLY_FLAGS) clean
-
-localizable-strings:
-	mkdir tmp || true
-	mv "Plugins/Purple Service" tmp
-	genstrings -o Resources/en.lproj -s AILocalizedString Source/*.m Source/*.h Plugins/*/*.h Plugins/*/*.m Plugins/*/*/*.h Plugins/*/*/*.m
-	genstrings -o tmp/Purple\ Service/Resources/en.lproj -s AILocalizedString tmp/Purple\ Service/*.h tmp/Purple\ Service/*.m
-	genstrings -o Frameworks/AIUtilities\ Framework/Resources/en.lproj -s AILocalizedString Frameworks/AIUtilities\ Framework/Source/*.h Frameworks/AIUtilities\ Framework/Source/*.m
-	genstrings -o Frameworks/Adium\ Framework/Resources/en.lproj -s AILocalizedString Frameworks/Adium\ Framework/Source/*.m Frameworks/Adium\ Framework/Source/*.h
-	mv "tmp/Purple Service" Plugins
-	rmdir tmp || true
-
-latest:
-	hg pull -u
-	make adium
+	swift package clean
+	rm -rf $(BUILD_DIR)
