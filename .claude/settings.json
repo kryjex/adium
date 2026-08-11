@@ -1,0 +1,16 @@
+{
+  "hooks": {
+    "PostToolUse": [
+      {
+        "matcher": "Edit|Write",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "FILE=$(jq -r '.tool_input.file_path // empty'); case \"$FILE\" in *Plugins/*|*.build/*|*Tests/*) exit 0;; *.swift|*.c|*.h) OUT=$(cd \"$CLAUDE_PROJECT_DIR\" && swift test 2>&1) || { printf '%s\\n' \"$OUT\" | tail -n 20 >&2; exit 2; };; esac",
+            "timeout": 300
+          }
+        ]
+      }
+    ]
+  }
+}

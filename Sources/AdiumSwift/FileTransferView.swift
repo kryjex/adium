@@ -13,14 +13,15 @@ public struct FileTransferView: View {
                 Image(systemName: "arrow.up.arrow.down.circle.fill")
                     .font(.system(size: 18))
                     .foregroundColor(.accentColor)
-                
-                Text("Transferencias de Archivos")
+                    .accessibilityHidden(true)
+
+                Text(t("File Transfers"))
                     .font(.system(size: 14, weight: .bold))
-                
+
                 Spacer()
-                
+
                 if !manager.transfers.isEmpty {
-                    Text("\(manager.transfers.count) elementos")
+                    Text(t("\(manager.transfers.count) items"))
                         .font(.system(size: 10))
                         .foregroundColor(.secondary)
                 }
@@ -34,6 +35,7 @@ public struct FileTransferView: View {
                     Image(systemName: "exclamationmark.triangle.fill")
                         .foregroundColor(.orange)
                         .font(.system(size: 10))
+                        .accessibilityHidden(true)
 
                     Text(error)
                         .font(.system(size: 9.5))
@@ -48,7 +50,8 @@ public struct FileTransferView: View {
                             .font(.system(size: 11))
                     }
                     .buttonStyle(.plain)
-                    .help("Descartar")
+                    .help(t("Dismiss"))
+                    .accessibilityLabel(t("Dismiss"))
                 }
                 .padding(.horizontal, 10)
                 .padding(.vertical, 6)
@@ -64,11 +67,12 @@ public struct FileTransferView: View {
                     Image(systemName: "folder.badge.gearshape")
                         .font(.system(size: 40))
                         .foregroundColor(.secondary.opacity(0.6))
-                    
-                    Text("Sin transferencias de archivos")
+                        .accessibilityHidden(true)
+
+                    Text(t("No file transfers"))
                         .font(.system(size: 13, weight: .bold))
-                    
-                    Text("Los archivos enviados o recibidos aparecerán aquí con su barra de progreso y velocidad estimada.")
+
+                    Text(t("Sent and received files will appear here with their progress bar and estimated speed."))
                         .font(.system(size: 10))
                         .foregroundColor(.secondary)
                         .multilineTextAlignment(.center)
@@ -90,7 +94,7 @@ public struct FileTransferView: View {
             
             // Footer Controls
             HStack {
-                Button("Limpiar Completadas") {
+                Button(t("Clear Completed")) {
                     manager.transfers.removeAll(where: { $0.state == .completed || $0.state == .cancelled || $0.state == .failed })
                 }
                 .buttonStyle(.borderless)
@@ -99,7 +103,7 @@ public struct FileTransferView: View {
                 
                 Spacer()
                 
-                Button("Cerrar") {
+                Button(t("Close")) {
                     FileTransferWindowController.shared.close()
                 }
                 .keyboardShortcut(.cancelAction)
@@ -128,20 +132,44 @@ struct FileTransferRow: View {
         case .failed: return .red
         }
     }
-    
+
+    // The rawValue persists to disk. Do not localize it.
+    // This property gives the localized text for display.
+    var directionText: String {
+        switch item.direction {
+        case .incoming: return t("Incoming")
+        case .outgoing: return t("Outgoing")
+        }
+    }
+
+    // The rawValue persists to disk. Do not localize it.
+    // This property gives the localized text for display.
+    var stateText: String {
+        switch item.state {
+        case .pending: return t("Pending Acceptance")
+        case .transferring: return t("Transferring...")
+        case .paused: return t("Paused")
+        case .completed: return t("Completed")
+        case .cancelled: return t("Cancelled")
+        case .failed: return t("Error")
+        }
+    }
+
+
     var body: some View {
         VStack(alignment: .leading, spacing: 6) {
             HStack(spacing: 10) {
                 Image(systemName: item.direction == .incoming ? "square.and.arrow.down.fill" : "square.and.arrow.up.fill")
                     .font(.system(size: 16))
                     .foregroundColor(item.direction == .incoming ? .blue : .purple)
+                    .accessibilityHidden(true)
                 
                 VStack(alignment: .leading, spacing: 2) {
                     Text(item.filename)
                         .font(.system(size: 11, weight: .bold))
                         .lineLimit(1)
                     
-                    Text("\(item.direction.rawValue) • Contacto: \(item.contactName)")
+                    Text(t("\(directionText) • Contact: \(item.contactName)"))
                         .font(.system(size: 9.5))
                         .foregroundColor(.secondary)
                 }
@@ -149,7 +177,7 @@ struct FileTransferRow: View {
                 Spacer()
                 
                 // State Badge
-                Text(item.state.rawValue)
+                Text(stateText)
                     .font(.system(size: 9, weight: .semibold))
                     .foregroundColor(stateColor)
                     .padding(.horizontal, 6)
@@ -160,6 +188,8 @@ struct FileTransferRow: View {
             // Progress Bar
             ProgressView(value: item.progress)
                 .progressViewStyle(.linear)
+                .accessibilityLabel(t("Transfer progress"))
+                .accessibilityValue(t("\(Int(item.progress * 100)) percent"))
             
             // Metrics & Action Buttons
             HStack {
@@ -178,7 +208,7 @@ struct FileTransferRow: View {
                 // Buttons
                 HStack(spacing: 6) {
                     if item.state == .pending && item.direction == .incoming {
-                        Button("Aceptar") {
+                        Button(t("Accept")) {
                             promptSaveAndAccept(item)
                         }
                         .buttonStyle(.borderedProminent)
@@ -187,7 +217,7 @@ struct FileTransferRow: View {
                     }
                     
                     if item.state == .pending || item.state == .transferring || item.state == .paused {
-                        Button("Cancelar") {
+                        Button(t("Cancel")) {
                             manager.cancelTransfer(item)
                         }
                         .buttonStyle(.bordered)
@@ -197,7 +227,7 @@ struct FileTransferRow: View {
                     }
                     
                     if item.state == .completed, let path = item.localPath {
-                        Button("Mostrar en Finder") {
+                        Button(t("Show in Finder")) {
                             NSWorkspace.shared.selectFile(path, inFileViewerRootedAtPath: "")
                         }
                         .buttonStyle(.borderless)

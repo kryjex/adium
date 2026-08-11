@@ -53,10 +53,10 @@ public final class BackupManager {
     public static let shared = BackupManager()
     private let fileManager = FileManager.default
     
-    /// Optional custom data directory for testing
+    /// This is an optional custom data directory for tests.
     public var customDataDirectory: URL?
     
-    /// Standard data directory (~/.adium-swift)
+    /// This is the standard data directory (~/.adium-swift).
     public var dataDirectory: URL {
         if let custom = customDataDirectory {
             try? fileManager.createDirectory(at: custom, withIntermediateDirectories: true)
@@ -70,7 +70,7 @@ public final class BackupManager {
     
     public init() {}
     
-    /// Export all application data, preferences, and logs to zip, tar.gz, or target folder
+    /// Export all application data, preferences, and logs to a zip file, a tar file, or a target folder.
     public func exportBackup(to destinationURL: URL) throws {
         let tempDir = fileManager.temporaryDirectory.appendingPathComponent("AdiumBackup_\(UUID().uuidString)", isDirectory: true)
         try fileManager.createDirectory(at: tempDir, withIntermediateDirectories: true)
@@ -79,12 +79,12 @@ public final class BackupManager {
             try? fileManager.removeItem(at: tempDir)
         }
         
-        // 1. Write Manifest
+        // 1. Write the manifest.
         let manifest = BackupManifest()
         let manifestData = try JSONEncoder().encode(manifest)
         try manifestData.write(to: tempDir.appendingPathComponent("manifest.json"))
         
-        // 2. Gather Preferences & Accounts (ensuring no plaintext passwords)
+        // 2. Gather preferences and accounts. Do not include plaintext passwords.
         let bridge = PurpleBridgeService.shared
         let defaults = UserDefaults.standard
         
@@ -105,7 +105,7 @@ public final class BackupManager {
         let prefsData = try encoder.encode(payload)
         try prefsData.write(to: tempDir.appendingPathComponent("preferences.json"))
         
-        // 3. Copy Chat History Logs
+        // 3. Copy the chat history logs.
         let logsStaging = tempDir.appendingPathComponent("logs", isDirectory: true)
         try fileManager.createDirectory(at: logsStaging, withIntermediateDirectories: true)
         
@@ -118,9 +118,8 @@ public final class BackupManager {
             }
         }
         
-        // 4. Copy Data Directory (~/.adium-swift), sanitizing anything that could contain
-        // plaintext credentials (accounts.xml passwords, *.key/token cache files) before
-        // it's included in the archive.
+        // 4. Copy the data directory (~/.adium-swift).
+        // Sanitize files that contain plaintext credentials before you include them in the archive.
         let dataStaging = tempDir.appendingPathComponent("data", isDirectory: true)
         try fileManager.createDirectory(at: dataStaging, withIntermediateDirectories: true)
 
@@ -129,10 +128,10 @@ public final class BackupManager {
             sanitizedCopyDataDirectory(from: sourceData, to: dataStaging)
         }
 
-        // 5. Package or copy to destinationURL. The new archive/copy is built at a staging path
-        // first and only swapped in once it has been fully and successfully created, so a failed
-        // tar/zip invocation (e.g. disk full) can never destroy a pre-existing backup at
-        // destinationURL.
+        // 5. Package or copy the data to destinationURL.
+        // Build the new archive at a staging path first.
+        // Swap the archive only when it is complete.
+        // This prevents a failed operation from destroying a pre-existing backup.
         let pathLower = destinationURL.path.lowercased()
         let stagingURL = destinationURL.deletingLastPathComponent()
             .appendingPathComponent(".\(destinationURL.lastPathComponent).tmp-\(UUID().uuidString)")
@@ -158,9 +157,9 @@ public final class BackupManager {
         }
     }
 
-    /// Recursively copies the data directory into the backup staging area, skipping obviously
-    /// sensitive files anywhere in the tree (password/secret/keychain-named files, *.key files,
-    /// token caches) and sanitizing accounts.xml to strip any <password> elements it may contain.
+    /// Copy the data directory into the backup staging area recursively.
+    /// Skip sensitive files anywhere in the tree.
+    /// Sanitize the accounts.xml file to strip password elements.
     private func sanitizedCopyDataDirectory(from sourceDir: URL, to destDir: URL) {
         let items = (try? fileManager.contentsOfDirectory(at: sourceDir, includingPropertiesForKeys: [.isDirectoryKey])) ?? []
         for item in items {
@@ -187,13 +186,13 @@ public final class BackupManager {
         }
     }
 
-    /// Strips any <password>...</password> elements from a libpurple-style accounts.xml file
-    /// before it is included in a backup archive, so plaintext credentials are never shipped
-    /// even if libpurple ever persists one. The rest of the file is left intact so restore
-    /// remains functional.
+    /// Strip password elements from a libpurple-style accounts.xml file.
+    /// Do this before you include the file in a backup archive.
+    /// This keeps plaintext credentials out of the archive.
+    /// The rest of the file remains intact to keep the restore functional.
     private func sanitizeAndCopyAccountsFile(from source: URL, to dest: URL) {
         guard let data = try? Data(contentsOf: source), let xml = String(data: data, encoding: .utf8) else {
-            // If it can't be read and sanitized as text, don't risk shipping it verbatim.
+            // Do not ship the file verbatim if you cannot read and sanitize it as text.
             return
         }
         var sanitized = xml
@@ -204,7 +203,7 @@ public final class BackupManager {
         try? sanitized.data(using: .utf8)?.write(to: dest)
     }
     
-    /// Import and restore data, preferences, and logs from backup archive or directory
+    /// Import and restore data, preferences, and logs from a backup archive or directory.
     public func importBackup(from sourceURL: URL) throws {
         let tempDir = fileManager.temporaryDirectory.appendingPathComponent("AdiumRestore_\(UUID().uuidString)", isDirectory: true)
         try fileManager.createDirectory(at: tempDir, withIntermediateDirectories: true)
@@ -238,7 +237,7 @@ public final class BackupManager {
             throw NSError(domain: "BackupManager", code: 3, userInfo: [NSLocalizedDescriptionKey: "El respaldo no contiene un archivo preferences.json válido."])
         }
         
-        // 1. Restore Preferences & Accounts
+        // 1. Restore the preferences and accounts.
         let prefsData = try Data(contentsOf: prefsFile)
         let payload = try JSONDecoder().decode(BackupPreferencesPayload.self, from: prefsData)
         
@@ -266,14 +265,14 @@ public final class BackupManager {
             defaults.set(sort, forKey: "contactSortOrder")
         }
         
-        // Reload bridge state
+        // Reload the bridge state.
         let bridge = PurpleBridgeService.shared
         bridge.restoreSavedAccounts()
         bridge.restoreSavedGroups()
         bridge.restoreSavedMetacontacts()
         bridge.restoreSavedContacts()
         
-        // 2. Restore Chat Logs
+        // 2. Restore the chat logs.
         let logsSource = extractDir.appendingPathComponent("logs", isDirectory: true)
         if fileManager.fileExists(atPath: logsSource.path) {
             let targetLogsDir = ChatLogStore.shared.logsDirectory
@@ -287,7 +286,7 @@ public final class BackupManager {
             }
         }
         
-        // 3. Restore Data Directory (~/.adium-swift)
+        // 3. Restore the data directory (~/.adium-swift).
         let dataSource = extractDir.appendingPathComponent("data", isDirectory: true)
         if fileManager.fileExists(atPath: dataSource.path) {
             let targetDataDir = dataDirectory

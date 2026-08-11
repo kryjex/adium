@@ -2,7 +2,7 @@ import Foundation
 import CLibpurple
 import AppKit
 
-/// Bridge service responsible for coordinating messaging protocols (including libpurple + purple-teams).
+/// This service coordinates messaging protocols.
 @MainActor
 @Observable
 public final class PurpleBridgeService {
@@ -17,10 +17,11 @@ public final class PurpleBridgeService {
 
     public var isLibpurpleLoaded: Bool = false
     public var activePluginName: String = "purple-teams"
-    public var connectionState: String = "Sin cuentas"
+    public var connectionState: String = t("No accounts")
     public var myStatus: OnlineStatus = .available
-    /// Custom status text shown alongside `myStatus` (e.g. "En una reunión"). Persisted in
-    /// UserDefaults and re-applied to libpurple whenever the status or the message changes.
+    /// This text shows a custom status.
+    /// The system saves this in UserDefaults.
+    /// The system applies this to libpurple when the status changes.
     public var myStatusMessage: String = ""
     
     public var accounts: [Account] = []
@@ -34,19 +35,19 @@ public final class PurpleBridgeService {
     public var activeTabID: UUID? = nil
     public var unreadCounts: [UUID: Int] = [:]
 
-    /// Addresses of in-flight libpurple request handles currently shown as an NSAlert.
-    /// Removed by onRequestClose so a respond queued after libpurple already closed the
-    /// request (e.g. the account disconnected while the alert was still up) is dropped
-    /// instead of firing into a stale/reused handle.
+    /// This contains addresses of active libpurple request handles.
+    /// The UI shows these requests as an NSAlert.
+    /// onRequestClose removes these addresses.
+    /// This stops a queued response from firing into a bad handle.
     private var pendingRequestAddrs: Set<UInt> = []
 
 
-    /// Indicates whether any configured account encountered a connection error
+    /// This shows if an account has a connection error.
     public var hasAccountError: Bool {
         accounts.contains(where: { !$0.isConnected && $0.connectionError != nil })
     }
     
-    /// Consolidated error message summary for disconnected accounts
+    /// This provides an error summary for disconnected accounts.
     public var accountErrorSummary: String? {
         let errors = accounts.compactMap { acc -> String? in
             guard let err = acc.connectionError, !acc.isConnected else { return nil }
@@ -64,8 +65,8 @@ public final class PurpleBridgeService {
         }
     }
 
-    /// Set overall user presence status in bridge and libpurple, carrying along whatever
-    /// custom status message is currently set.
+    /// This sets the user status in the bridge and libpurple.
+    /// This includes the custom status message.
     public func setUserStatus(_ status: OnlineStatus) {
         self.myStatus = status
         if isLibpurpleLoaded {
@@ -73,8 +74,9 @@ public final class PurpleBridgeService {
         }
     }
 
-    /// Update the custom status message text and re-apply the current status (with the new
-    /// message) to libpurple. Persisted to UserDefaults so it survives relaunches.
+    /// This updates the custom status message.
+    /// This applies the new message and current status to libpurple.
+    /// The system saves this to UserDefaults.
     public func setStatusMessage(_ message: String) {
         let trimmed = message.trimmingCharacters(in: .whitespacesAndNewlines)
         self.myStatusMessage = trimmed
@@ -84,9 +86,9 @@ public final class PurpleBridgeService {
         }
     }
     
-    /// Reconnect all configured accounts
+    /// This reconnects all accounts.
     public func reconnectAccounts() {
-        self.connectionState = "Reconectando cuentas..."
+        self.connectionState = t("Reconnecting accounts...")
         for i in 0..<accounts.count {
             accounts[i].connectionError = nil
         }
@@ -94,10 +96,9 @@ public final class PurpleBridgeService {
             for acc in accounts {
                 let accountKey = "\(acc.username):\(acc.accountProtocol.purpleProtocolID)"
                 let password = KeychainHelper.fetchPassword(for: accountKey) ?? ""
-                // Options must be applied after the account exists in libpurple: both
-                // calls funnel through g_idle_add in order, so do_set_account_option would
-                // run against purple_accounts_find() == NULL (and silently drop the
-                // options) if applied first.
+                // You must apply options after the account exists in libpurple.
+                // The two calls go through g_idle_add in order.
+                // The do_set_account_option function will fail if applied first.
                 _ = adium_purple_add_account(acc.username, acc.accountProtocol.purpleProtocolID, password)
                 applyAccountOptions(acc)
             }
@@ -115,23 +116,41 @@ public final class PurpleBridgeService {
         self.myStatusMessage = UserDefaults.standard.string(forKey: savedStatusMessageKey) ?? ""
     }
     
-    /// Save accounts metadata to UserDefaults for persistence
+    /// This saves accounts metadata to UserDefaults.
     private func saveAccountsToDefaults() {
         if let encoded = try? JSONEncoder().encode(accounts) {
             UserDefaults.standard.set(encoded, forKey: savedAccountsKey)
         }
     }
     
-    /// Restore accounts metadata from UserDefaults
+    /// This restores accounts metadata from UserDefaults.
+    /// Usernames saved by older builds normalize on load.
+    /// The Keychain entry moves to the new key when the username changes.
     public func restoreSavedAccounts() {
         if let data = UserDefaults.standard.data(forKey: savedAccountsKey),
            let saved = try? JSONDecoder().decode([Account].self, from: data) {
-            self.accounts = saved
+            var migrated = saved
+            var changed = false
+            for idx in migrated.indices {
+                let canonical = migrated[idx].accountProtocol.canonicalUsername(migrated[idx].username)
+                guard canonical != migrated[idx].username else { continue }
+                let protoID = migrated[idx].accountProtocol.purpleProtocolID
+                let oldKey = "\(migrated[idx].username):\(protoID)"
+                let newKey = "\(canonical):\(protoID)"
+                if let password = KeychainHelper.fetchPassword(for: oldKey) {
+                    KeychainHelper.savePassword(password, for: newKey)
+                    KeychainHelper.deletePassword(for: oldKey)
+                }
+                migrated[idx].username = canonical
+                changed = true
+            }
+            self.accounts = migrated
+            if changed {
+                saveAccountsToDefaults()
+            }
         }
-        // Import from libpurple only on true first run: once the Swift layer has persisted
-        // its own list (even an empty one — e.g. the user deleted their last account), or the
-        // one-time import already ran, re-importing would resurrect deleted accounts from
-        // stale accounts.xml entries.
+        // This imports from libpurple only on the first run.
+        // Re-importing restores deleted accounts from old accounts.xml entries.
         if accounts.isEmpty,
            UserDefaults.standard.data(forKey: savedAccountsKey) == nil,
            !UserDefaults.standard.bool(forKey: legacyImportDoneKey) {
@@ -139,9 +158,8 @@ public final class PurpleBridgeService {
         }
     }
 
-    /// libpurple protocol IDs we can map back to an AccountProtocol, including
-    /// retired IDs from earlier builds ("prpl-teams" never matched the real
-    /// plugin ID and could never connect; "prpl-adium-whatsapp" was the stub).
+    /// These are libpurple protocol IDs that map to an AccountProtocol.
+    /// These include old IDs from previous builds.
     nonisolated static let importableProtocolIDs: [String: AccountProtocol] = [
         "prpl-eionrobb-msteams": .teams,
         "prpl-teams": .teams,
@@ -151,9 +169,7 @@ public final class PurpleBridgeService {
         "prpl-matrix": .matrix
     ]
 
-    /// One-time import of accounts that exist only in libpurple's accounts.xml —
-    /// accounts added before the Swift layer persisted its own account list would
-    /// otherwise show up as "0 cuentas" even though libpurple still has them.
+    /// This imports accounts from accounts.xml one time.
     private func importAccountsFromLibpurple() {
         defer { UserDefaults.standard.set(true, forKey: legacyImportDoneKey) }
         let accountsXML = FileManager.default.homeDirectoryForCurrentUser
@@ -169,8 +185,8 @@ public final class PurpleBridgeService {
         saveAccountsToDefaults()
     }
 
-    /// Parse the `<account><protocol>…</protocol><name>…</name></account>` entries of a
-    /// libpurple accounts.xml, keeping only protocols we know how to map. Exposed for testing.
+    /// This parses the account entries in accounts.xml.
+    /// This keeps only the protocols that map.
     nonisolated static func parsePurpleAccountsXML(_ xml: String) -> [Account] {
         var result: [Account] = []
         for block in xml.components(separatedBy: "</account>") {
@@ -178,8 +194,9 @@ public final class PurpleBridgeService {
                   let name = firstTagContent("name", in: block),
                   let mapped = importableProtocolIDs[protocolID],
                   !name.isEmpty else { continue }
-            if !result.contains(where: { $0.username == name && $0.accountProtocol == mapped }) {
-                result.append(Account(username: name, accountProtocol: mapped))
+            let canonical = mapped.canonicalUsername(name)
+            if !result.contains(where: { $0.username == canonical && $0.accountProtocol == mapped }) {
+                result.append(Account(username: canonical, accountProtocol: mapped))
             }
         }
         return result
@@ -207,11 +224,13 @@ public final class PurpleBridgeService {
            let saved = try? JSONDecoder().decode([ContactGroup].self, from: data) {
             self.contactGroups = saved
         }
+        // The default group names localize once at creation time.
+        // After that, they are user data and follow renames, not the locale.
         if contactGroups.isEmpty {
             self.contactGroups = [
                 ContactGroup(name: "General", isExpanded: true),
-                ContactGroup(name: "Trabajo", isExpanded: true),
-                ContactGroup(name: "Amigos", isExpanded: true)
+                ContactGroup(name: t("Work"), isExpanded: true),
+                ContactGroup(name: t("Friends"), isExpanded: true)
             ]
         }
     }
@@ -228,9 +247,8 @@ public final class PurpleBridgeService {
     public func renameGroup(oldName: String, newName: String) {
         let trimmedNew = newName.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !trimmedNew.isEmpty, oldName != trimmedNew else { return }
-        // Refuse to create a second group with a name that already exists (case-insensitive,
-        // matching createGroup's duplicate check) — two ContactGroup entries with the same
-        // name break the UI's section identity.
+        // Do not create a second group with an existing name.
+        // Two ContactGroup entries with the same name cause errors in the UI.
         guard !contactGroups.contains(where: { $0.name.caseInsensitiveCompare(trimmedNew) == .orderedSame }) else { return }
 
         if let idx = contactGroups.firstIndex(where: { $0.name == oldName }) {
@@ -308,9 +326,8 @@ public final class PurpleBridgeService {
         let defaultName = name ?? matchingContacts.first?.displayName ?? "Metacontacto"
         let group = matchingContacts.first?.group ?? "General"
 
-        // A contact being combined here may already belong to a different metacontact
-        // (e.g. combining A+B then B+C); detach it from that old one first so it doesn't
-        // end up listed under two metacontacts at once.
+        // A contact can belong to a different metacontact.
+        // The code detaches the contact from the old metacontact first.
         for cID in contactIDs {
             detachContactFromExistingMetacontact(cID)
         }
@@ -334,8 +351,8 @@ public final class PurpleBridgeService {
         return meta
     }
 
-    /// Removes a contact from whichever metacontact currently references it (if any),
-    /// dissolving that metacontact if it would be left with fewer than 2 members.
+    /// This removes a contact from a metacontact.
+    /// This deletes the metacontact if it has fewer than 2 members.
     private func detachContactFromExistingMetacontact(_ contactID: UUID) {
         guard let idx = metacontacts.firstIndex(where: { $0.contactIDs.contains(contactID) }) else { return }
         metacontacts[idx].contactIDs.removeAll(where: { $0 == contactID })
@@ -411,8 +428,42 @@ public final class PurpleBridgeService {
     public func restoreSavedContacts() {
         if let data = UserDefaults.standard.data(forKey: savedContactsKey),
            let saved = try? JSONDecoder().decode([Contact].self, from: data) {
-            self.contacts = saved
+            // The plugin filters out WhatsApp channel and story chats.
+            // The code drops chats that were saved before the filter existed.
+            let filtered = saved.filter {
+                !$0.handle.hasSuffix("@newsletter") && $0.handle != "status@broadcast"
+            }
+            self.contacts = Self.dedupeContactsByHandle(filtered)
+            if self.contacts.count != saved.count {
+                saveContactsToDefaults()
+            }
         }
+    }
+
+    /// The system keys chat logs by handle.
+    /// Two contacts with the same handle are the same conversation.
+    /// This keeps the newest contact.
+    /// This keeps user-set fields from the older contact.
+    nonisolated static func dedupeContactsByHandle(_ contacts: [Contact]) -> [Contact] {
+        var byHandle: [String: Contact] = [:]
+        var order: [String] = []
+        for contact in contacts {
+            if var kept = byHandle[contact.handle] {
+                // The new contact replaces the old contact.
+                // The code preserves custom fields on the old contact.
+                var newer = contact
+                if newer.alias == nil { newer.alias = kept.alias }
+                if newer.avatarData == nil { newer.avatarData = kept.avatarData }
+                if newer.metacontactID == nil { newer.metacontactID = kept.metacontactID }
+                newer.isBlocked = newer.isBlocked || kept.isBlocked
+                kept = newer
+                byHandle[contact.handle] = kept
+            } else {
+                byHandle[contact.handle] = contact
+                order.append(contact.handle)
+            }
+        }
+        return order.compactMap { byHandle[$0] }
     }
     
     public func setAlias(_ alias: String?, for contactID: UUID) {
@@ -450,11 +501,10 @@ public final class PurpleBridgeService {
     
     // MARK: - Account Operations & Options
 
-    /// Resolves the account that owns a contact: prefer an exact match on
-    /// accountUsername + protocol; fall back to a protocol-only match only when the
-    /// contact has no recorded accountUsername. Never guesses across accounts that
-    /// disagree with a recorded accountUsername, since that would route messages/files
-    /// to the wrong account.
+    /// This finds the account for a contact.
+    /// This uses the accountUsername and protocol to find the account.
+    /// This falls back to protocol-only match if accountUsername is absent.
+    /// This does not guess across accounts to prevent errors.
     func resolveAccount(for contact: Contact) -> Account? {
         if let username = contact.accountUsername {
             return accounts.first(where: { $0.username == username && $0.accountProtocol == contact.accountProtocol })
@@ -478,12 +528,27 @@ public final class PurpleBridgeService {
             _ = adium_purple_set_account_option(username, protoID, "resource", resource)
         }
         if let useSSL = account.useSSL {
-            // "require_tls" is only meaningful to the XMPP prpl; other protocols either
-            // always negotiate TLS themselves or don't expose a comparable toggle, so
-            // forwarding it there would just create a dead account option.
+            // "require_tls" only works for XMPP.
+            // Other protocols negotiate TLS automatically.
             if account.accountProtocol == .xmpp {
                 _ = adium_purple_set_account_bool_option(username, protoID, "require_tls", useSSL)
             }
+        }
+        if account.accountProtocol == .whatsapp {
+            // AnimatedImageView renders WebP itself; gdk-pixbuf often cannot.
+            _ = adium_purple_set_account_bool_option(username, protoID, "inline-webp", true)
+            // The contact filter in restoreSavedContacts assumes the plugin
+            // drops channel (newsletter) chats.
+            _ = adium_purple_set_account_bool_option(username, protoID, "ignore-newsletters", true)
+        }
+        if account.accountProtocol == .teams {
+            // A fresh account has no last_message_timestamp, and the plugin
+            // then fetches offline history "since now": the first login shows
+            // no messages, and the self-chat (48:notes) has no other fetch
+            // path. Zero makes the first sweep pull the last page of every
+            // conversation regardless of age. Later logins keep the marker
+            // the plugin maintains.
+            _ = adium_purple_seed_account_int_option(username, protoID, "last_message_timestamp", 0)
         }
         for (key, val) in account.customOptions {
             _ = adium_purple_set_account_option(username, protoID, key, val)
@@ -510,8 +575,10 @@ public final class PurpleBridgeService {
         }
     }
     
-    /// Connect a new account via libpurple (e.g. Teams, XMPP)
-    public func connectAccount(username: String, protocolType: AccountProtocol, password: String, server: String? = nil, port: Int? = nil, resource: String? = nil, useSSL: Bool? = nil) {
+    /// This connects a new account via libpurple.
+    /// The username normalizes to the protocol's canonical form first.
+    public func connectAccount(username rawUsername: String, protocolType: AccountProtocol, password: String, server: String? = nil, port: Int? = nil, resource: String? = nil, useSSL: Bool? = nil) {
+        let username = protocolType.canonicalUsername(rawUsername)
         let accountKey = "\(username):\(protocolType.purpleProtocolID)"
         if !password.isEmpty {
             KeychainHelper.savePassword(password, for: accountKey)
@@ -533,9 +600,9 @@ public final class PurpleBridgeService {
         
         if isLibpurpleLoaded {
             let fetchedPassword = password.isEmpty ? (KeychainHelper.fetchPassword(for: accountKey) ?? "") : password
-            // Add the account before applying options: do_set_account_option looks the
-            // account up via purple_accounts_find(), which returns NULL (dropping the
-            // options silently) until do_add_account has run.
+            // This adds the account before it applies options.
+            // do_set_account_option uses purple_accounts_find.
+            // purple_accounts_find returns NULL until do_add_account runs.
             _ = adium_purple_add_account(username, protocolType.purpleProtocolID, fetchedPassword)
             if let acc = accounts.first(where: { $0.username == username && $0.accountProtocol == protocolType }) {
                 applyAccountOptions(acc)
@@ -546,21 +613,37 @@ public final class PurpleBridgeService {
         }
     }
     
-    /// Remove an account and disconnect it from libpurple
-    public func removeAccount(_ account: Account) {
+    /// This removes an account and disconnects it from libpurple.
+    /// Pass deleteChatLogs to also delete the saved transcripts of its contacts.
+    public func removeAccount(_ account: Account, deleteChatLogs: Bool = false) {
         self.accounts.removeAll(where: { $0.id == account.id })
         saveAccountsToDefaults()
-        
+
         let accountKey = "\(account.username):\(account.accountProtocol.purpleProtocolID)"
         KeychainHelper.deletePassword(for: accountKey)
-        
+
+        let removedContacts = self.contacts.filter { $0.accountProtocol == account.accountProtocol && ($0.accountUsername == nil || $0.accountUsername == account.username) }
         self.contacts.removeAll(where: { $0.accountProtocol == account.accountProtocol && ($0.accountUsername == nil || $0.accountUsername == account.username) })
         saveContactsToDefaults()
+
+        if deleteChatLogs {
+            let store = ChatLogStore.shared
+            // Do not delete a log that a remaining contact (another account) still uses.
+            let remainingHandles = Set(self.contacts.map { store.sanitizeHandle($0.handle) })
+            for contact in removedContacts {
+                messagesPerContact.removeValue(forKey: contact.id)
+                let safeHandle = store.sanitizeHandle(contact.handle)
+                if !remainingHandles.contains(safeHandle) {
+                    store.deleteLog(for: contact.handle)
+                }
+                // Legacy logs keyed by contact UUID.
+                store.deleteLog(for: contact.id.uuidString)
+            }
+        }
         
         if isLibpurpleLoaded {
-            // Purge every protocol-ID variant this account may be persisted under in
-            // accounts.xml, including retired IDs ("prpl-teams"): removing only the current
-            // ID leaves a stale entry behind that the legacy import could resurrect.
+            // This removes all protocol-ID variants from accounts.xml.
+            // This prevents the legacy import from restoring old accounts.
             var idsToRemove = Set(
                 Self.importableProtocolIDs.filter { $0.value == account.accountProtocol }.map(\.key)
             )
@@ -571,16 +654,16 @@ public final class PurpleBridgeService {
         }
         
         if accounts.isEmpty {
-            self.connectionState = "Sin cuentas"
+            self.connectionState = t("No accounts")
         }
     }
     
-    /// Discovers all available libpurple plugin `.so` files from the App Bundle PlugIns path and local Plugins directory.
+    /// This finds all libpurple plugin .so files in the app paths.
     private func discoverPluginPaths() -> [String] {
         var foundPlugins: [String: String] = [:] // filename -> full path
         let fileManager = FileManager.default
 
-        // 1. App Bundle Contents/PlugIns directory
+        // 1. Find in App Bundle Contents/PlugIns directory.
         let bundlePlugInsDir = Bundle.main.bundlePath + "/Contents/PlugIns"
         if fileManager.fileExists(atPath: bundlePlugInsDir),
            let contents = try? fileManager.contentsOfDirectory(atPath: bundlePlugInsDir) {
@@ -590,7 +673,7 @@ public final class PurpleBridgeService {
             }
         }
 
-        // 2. Development Plugins directory (e.g. ./Plugins/purple-teams/libteams.so, ./Plugins/purple-whatsapp/libwhatsapp.so)
+        // 2. Find in Development Plugins directory.
         let currentDir = fileManager.currentDirectoryPath
         let searchDirs = [
             "Plugins",
@@ -617,16 +700,29 @@ public final class PurpleBridgeService {
             }
         }
 
+        // 3. Find in the user plugins directory (~/.adium-swift/plugins).
+        // Installed-by-user plugins land here, outside the app bundle.
+        let userPluginsDir = PluginManager.userPluginsDirectory.path
+        if fileManager.fileExists(atPath: userPluginsDir),
+           let contents = try? fileManager.contentsOfDirectory(atPath: userPluginsDir) {
+            for file in contents where file.hasSuffix(".so") {
+                if foundPlugins[file] == nil {
+                    let fullPath = (userPluginsDir as NSString).appendingPathComponent(file)
+                    foundPlugins[file] = fullPath
+                }
+            }
+        }
+
         return Array(foundPlugins.values)
     }
-    
-    /// Initialize libpurple C core and load dynamic plugins (.so / .dylib / purple-teams / purple-whatsapp)
+
+    /// This initializes the libpurple C core and loads dynamic plugins.
     public func initializeLibpurpleCore() {
         let pluginsSearchDir = Bundle.main.bundlePath + "/Contents/PlugIns"
         let userHome = FileManager.default.homeDirectoryForCurrentUser.path
         let userDir = userHome + "/.adium-swift"
         
-        // 1. Set event callbacks from C -> Swift
+        // 1. Set event callbacks from C to Swift.
         adium_purple_set_event_callbacks(
             PurpleBridgeService.handleContactCallback,
             PurpleBridgeService.handleMessageCallback,
@@ -640,7 +736,8 @@ public final class PurpleBridgeService {
             PurpleBridgeService.handleRequestCloseCallback,
             PurpleBridgeService.handleConnectionProgressCallback,
             PurpleBridgeService.handleTypingCallback,
-            PurpleBridgeService.handleBuddyRemovedCallback
+            PurpleBridgeService.handleBuddyRemovedCallback,
+            PurpleBridgeService.handleNotifyMessageCallback
         )
 
         adium_purple_set_chat_callbacks(
@@ -648,32 +745,41 @@ public final class PurpleBridgeService {
             PurpleBridgeService.handleChatLeftCallback,
             PurpleBridgeService.handleChatMessageCallback,
             PurpleBridgeService.handleChatBuddyJoinedCallback,
-            PurpleBridgeService.handleChatBuddyLeftCallback
+            PurpleBridgeService.handleChatBuddyLeftCallback,
+            PurpleBridgeService.handleChatListedCallback,
+            PurpleBridgeService.handleChatUnlistedCallback
         )
 
-        // 2. Initialize Libpurple Core
+        // 2. Initialize libpurple core.
         let success = adium_purple_init(pluginsSearchDir, userDir)
         
         if success {
             self.isLibpurpleLoaded = true
             
-            // Start GLib background socket event loop
+            // Start GLib background socket event loop.
             adium_purple_start_event_loop()
             
-            // Dynamic discovery and loading of all available plugin .so files
+            // This finds and loads all available plugin .so files.
+            // A plugin the user disabled stays on disk but does not load:
+            // the disable flow cannot unload a live libpurple 2 plugin, so it
+            // applies at the next launch instead.
             let discoveredPlugins = discoverPluginPaths()
+            PluginManager.shared.refreshInstalled(discoveredPaths: discoveredPlugins)
             var loadedPluginNames: [String] = []
             for pluginPath in discoveredPlugins {
-                _ = adium_purple_load_plugin(pluginPath)
                 let pluginFileName = (pluginPath as NSString).lastPathComponent
+                if PluginManager.shared.isDisabled(filename: pluginFileName) {
+                    continue
+                }
+                _ = adium_purple_load_plugin(pluginPath)
                 loadedPluginNames.append(pluginFileName)
             }
             if !loadedPluginNames.isEmpty {
                 self.activePluginName = loadedPluginNames.joined(separator: ", ")
             }
             
-            // Re-connect saved accounts with passwords from Keychain. Add the account
-            // before applying options — see the note in connectAccount().
+            // This reconnects saved accounts with passwords from Keychain.
+            // This adds the account before it applies options.
             for acc in accounts {
                 let accountKey = "\(acc.username):\(acc.accountProtocol.purpleProtocolID)"
                 let password = KeychainHelper.fetchPassword(for: accountKey) ?? ""
@@ -681,16 +787,16 @@ public final class PurpleBridgeService {
                 applyAccountOptions(acc)
             }
             
-            // Emit loaded accounts & buddies from libpurple
+            // This emits loaded accounts and buddies from libpurple.
             adium_purple_load_accounts()
             
             if let statusCStr = adium_purple_get_status_info() {
                 self.connectionState = String(cString: statusCStr)
             } else {
-                self.connectionState = "Activo (\(self.activePluginName))"
+                self.connectionState = t("Active (\(self.activePluginName))")
             }
         } else {
-            self.connectionState = "Error de Inicialización Libpurple"
+            self.connectionState = t("Libpurple initialization error")
         }
     }
     
@@ -702,6 +808,17 @@ public final class PurpleBridgeService {
         }
         activeTabID = contactID
         markAsRead(for: contactID)
+        ensureGroupChatJoined(contactID)
+    }
+
+    /// Listed chats have no libpurple conversation until they join.
+    /// Joining loads the roster and the recent history.
+    private func ensureGroupChatJoined(_ contactID: UUID) {
+        guard let contact = contacts.first(where: { $0.id == contactID }),
+              contact.isGroupChat,
+              !joinedChatRooms.contains(contact.handle),
+              let username = contact.accountUsername else { return }
+        _ = adium_purple_join_chat(username, contact.accountProtocol.purpleProtocolID, contact.handle)
     }
     
     public func closeTab(_ contactID: UUID) {
@@ -741,15 +858,15 @@ public final class PurpleBridgeService {
             name: account.username,
             handle: account.username,
             status: .available,
-            role: "Propietario"
+            role: "owner"
         )
-        
+
         let groupContact = Contact(
             name: trimmedName,
             handle: trimmedName,
             status: .available,
-            customStatusMessage: topic ?? "Grupo / Canal",
-            group: "Grupos",
+            customStatusMessage: topic ?? t("Group / Channel"),
+            group: t("Groups"),
             accountProtocol: account.accountProtocol,
             accountUsername: account.username,
             isGroupChat: true,
@@ -757,7 +874,7 @@ public final class PurpleBridgeService {
             topic: topic
         )
         
-        createGroup(name: "Grupos")
+        createGroup(name: t("Groups"))
         contacts.append(groupContact)
         saveContactsToDefaults()
         openTab(for: groupContact.id)
@@ -791,7 +908,8 @@ public final class PurpleBridgeService {
         }
     }
     
-    /// Retrieve messages for a contact, loading from ChatLogStore if not cached
+    /// This retrieves messages for a contact.
+    /// This loads from ChatLogStore if not cached.
     public func messages(for contact: Contact) -> [ChatMessage] {
         if let cached = messagesPerContact[contact.id] {
             return cached
@@ -803,17 +921,18 @@ public final class PurpleBridgeService {
     
     public func sendMessage(_ text: String, to contact: Contact) {
         if contact.isBlocked {
-            connectionState = "No se puede enviar: \(contact.displayName) esta bloqueado"
+            connectionState = t("Cannot send: \(contact.displayName) is blocked")
             return
         }
 
         let account = resolveAccount(for: contact)
         if isLibpurpleLoaded && account == nil {
-            connectionState = "No se pudo enviar mensaje: no se encontro una cuenta para \(contact.displayName)"
+            connectionState = t("Could not send message: no account found for \(contact.displayName)")
             return
         }
 
         let newMsg = ChatMessage(senderName: "Me", isFromMe: true, text: text)
+        recordLocalSend(contactID: contact.id, text: text)
         if messagesPerContact[contact.id] != nil {
             messagesPerContact[contact.id]?.append(newMsg)
         } else {
@@ -840,6 +959,41 @@ public final class PurpleBridgeService {
         }
     }
     
+    // MARK: - Teams Calls (WebView bypass)
+
+    /// These handles wait for a /call URL from purple-teams.
+    /// onMessageReceived opens the call window when the URL arrives.
+    private var pendingCallRequests: [String: Date] = [:]
+    private let pendingCallTimeout: TimeInterval = 15
+
+    /// This starts or joins a Teams call for a conversation.
+    /// Thread handles ("19:...") produce the meetup-join URL directly.
+    /// Buddy handles go through the plugin's /call command.
+    /// The plugin resolves the buddy to its chat thread and writes the URL back.
+    public func startTeamsCall(for contact: Contact) {
+        if let url = TeamsCallLink.meetingURL(forThreadHandle: contact.handle) {
+            TeamsCallWindowController.shared.open(url: url)
+            return
+        }
+        guard isLibpurpleLoaded, let account = resolveAccount(for: contact) else {
+            connectionState = t("Could not start the call with \(contact.displayName)")
+            return
+        }
+        pendingCallRequests[contact.handle] = Date()
+        _ = adium_purple_exec_command(account.username, contact.accountProtocol.purpleProtocolID, contact.handle, "call", contact.isGroupChat)
+    }
+
+    /// This opens the call window if this message answers a pending /call.
+    private func handlePendingCallResponse(contactHandle: String, text: String) {
+        guard let requestedAt = pendingCallRequests[contactHandle],
+              Date().timeIntervalSince(requestedAt) < pendingCallTimeout,
+              let url = TeamsCallLink.meetingURL(in: text) else {
+            return
+        }
+        pendingCallRequests.removeValue(forKey: contactHandle)
+        TeamsCallWindowController.shared.open(url: url)
+    }
+
     // MARK: - Handlers for Live Events from Libpurple
     
     func onContactUpdated(name: String, handle: String, statusId: String, statusName: String, group: String, protocolId: String) {
@@ -866,9 +1020,9 @@ public final class PurpleBridgeService {
             }
             
             if oldStatus == .offline && parsedStatus != .offline {
-                EventManager.shared.triggerEvent(.contactOnline, title: contacts[idx].displayName, content: "Está conectado", contactID: contacts[idx].id)
+                EventManager.shared.triggerEvent(.contactOnline, title: contacts[idx].displayName, content: t("Is now online"), contactID: contacts[idx].id)
             } else if oldStatus != .offline && parsedStatus == .offline {
-                EventManager.shared.triggerEvent(.contactOffline, title: contacts[idx].displayName, content: "Se ha desconectado", contactID: contacts[idx].id)
+                EventManager.shared.triggerEvent(.contactOffline, title: contacts[idx].displayName, content: t("Has disconnected"), contactID: contacts[idx].id)
             }
         } else {
             let newContact = Contact(
@@ -882,19 +1036,39 @@ public final class PurpleBridgeService {
             )
             contacts.append(newContact)
             if parsedStatus != .offline {
-                EventManager.shared.triggerEvent(.contactOnline, title: newContact.displayName, content: "Está conectado", contactID: newContact.id)
+                EventManager.shared.triggerEvent(.contactOnline, title: newContact.displayName, content: t("Is now online"), contactID: newContact.id)
             }
         }
         saveContactsToDefaults()
     }
     
-    func onMessageReceived(senderHandle: String, text: String, isFromMe: Bool) {
-        var contact = contacts.first(where: { $0.handle == senderHandle })
-        
-        // Handling Unknown Senders: create a new Contact on-the-fly if not found
+    func onMessageReceived(senderHandle: String, text: String, isFromMe: Bool, protocolId: String? = nil, accountUsername: String? = nil, image: Data? = nil, timestamp: Int64 = 0, isSystem: Bool = false) {
+        var contact = contacts.first(where: { $0.handle == senderHandle && (protocolId == nil || $0.accountProtocol.purpleProtocolID == protocolId) })
+
+        // A contact with this handle can exist under the wrong protocol.
+        // The code keys chat logs by handle.
+        // A contact with the same handle is the same conversation.
+        // This reassigns it instead of creating a duplicate.
+        if contact == nil, let pid = protocolId,
+           let matchedProto = AccountProtocol.allCases.first(where: { $0.purpleProtocolID == pid }),
+           let idx = contacts.firstIndex(where: { $0.handle == senderHandle }) {
+            contacts[idx].accountProtocol = matchedProto
+            if let accountUsername {
+                contacts[idx].accountUsername = accountUsername
+            }
+            saveContactsToDefaults()
+            contact = contacts[idx]
+        }
+
+        // An unknown sender still needs a placeholder Contact so the message has somewhere to attach.
         if contact == nil {
-            let defaultProto = accounts.first?.accountProtocol ?? .teams
-            let defaultUsername = accounts.first?.username
+            var defaultProto = AccountProtocol.teams
+            if let pid = protocolId, let matchedProto = AccountProtocol.allCases.first(where: { $0.purpleProtocolID == pid }) {
+                defaultProto = matchedProto
+            } else if let firstProto = accounts.first?.accountProtocol {
+                defaultProto = firstProto
+            }
+            let defaultUsername = accountUsername ?? accounts.first?.username
             let newContact = Contact(
                 name: senderHandle,
                 handle: senderHandle,
@@ -911,29 +1085,32 @@ public final class PurpleBridgeService {
         
         guard let c = contact else { return }
 
-        // Drop messages from blocked contacts entirely: no log entry, no chat history,
-        // no event.
+        // Drop messages from blocked contacts.
+        // This stops log entries, chat history, and events.
         if !isFromMe && c.isBlocked {
             return
         }
 
+        handlePendingCallResponse(contactHandle: c.handle, text: text)
+
         let senderName = isFromMe ? "Me" : c.displayName
-        let newMsg = ChatMessage(senderName: senderName, isFromMe: isFromMe, text: text)
-        
-        if messagesPerContact[c.id] != nil {
-            // Deduplicate: if last message was sent from me with identical text within 3 seconds, skip duplicate signal
-            if let last = messagesPerContact[c.id]?.last, last.isFromMe == isFromMe, last.text == text, abs(Date().timeIntervalSince(last.timestamp)) < 3.0 {
-                return
-            }
-            messagesPerContact[c.id]?.append(newMsg)
-        } else {
-            var existing = ChatLogStore.shared.loadMessages(for: c.handle) ?? []
-            if let last = existing.last, last.isFromMe == isFromMe, last.text == text, abs(Date().timeIntervalSince(last.timestamp)) < 3.0 {
-                return
-            }
-            existing.append(newMsg)
-            messagesPerContact[c.id] = existing
+        // timestamp 0 means libpurple did not carry a message time.
+        let msgDate = timestamp > 0 ? Date(timeIntervalSince1970: TimeInterval(timestamp)) : Date()
+        let newMsg = ChatMessage(senderName: senderName, isFromMe: isFromMe, text: text, timestamp: msgDate, imageData: image, isSystemEvent: isSystem)
+
+        if isFromMe && isLocalSendEcho(contactID: c.id, text: text) {
+            return
         }
+        var msgs = messagesPerContact[c.id] ?? (ChatLogStore.shared.loadMessages(for: c.handle) ?? [])
+        // This skips duplicate signals within 3 seconds.
+        if let last = msgs.last, last.isFromMe == isFromMe, last.text == text, abs(Date().timeIntervalSince(last.timestamp)) < 3.0 {
+            return
+        }
+        if isHistoryDuplicate(newMsg, in: msgs, timestamp: timestamp) {
+            return
+        }
+        msgs.append(newMsg)
+        messagesPerContact[c.id] = msgs
         
         if let updatedMsgs = messagesPerContact[c.id] {
             ChatLogStore.shared.saveMessages(updatedMsgs, for: c.handle)
@@ -954,24 +1131,147 @@ public final class PurpleBridgeService {
         let proto = AccountProtocol.allCases.first(where: { $0.purpleProtocolID == protocolId })
         if let idx = accounts.firstIndex(where: { $0.username == username && (proto == nil || $0.accountProtocol == proto) }) {
             accounts[idx].isConnected = isConnected
-            if !isConnected && statusMsg != "Desconectado" {
+            if !isConnected && statusMsg != "Disconnected" {
                 accounts[idx].connectionError = statusMsg
             } else if isConnected {
                 accounts[idx].connectionError = nil
             }
             saveAccountsToDefaults()
         }
+        if !isConnected {
+            // The prpl does not reliably emit chat-left on disconnect.
+            // A stale entry here would block the rejoin after a reconnect.
+            let accountRooms = contacts.filter { $0.isGroupChat && $0.accountUsername == username }.map(\.handle)
+            joinedChatRooms.subtract(accountRooms)
+        }
         self.connectionState = "\(username): \(statusMsg)"
     }
 
     // MARK: - Group Chat (MUC) Live Events
 
-    func onChatJoined(roomName: String, username: String, protocolId: String) {
+    // Rooms with a live libpurple conversation. Listed chats outside this
+    // set need a join before messages can flow.
+    private var joinedChatRooms: Set<String> = []
+
+    /// The server replays recent history on every join. A stored message
+    /// with the same time, direction, and text is the same message.
+    /// Live messages (timestamp 0) never match here; the 3-second window
+    /// in the caller handles those.
+    private func isHistoryDuplicate(_ msg: ChatMessage, in msgs: [ChatMessage], timestamp: Int64) -> Bool {
+        guard timestamp > 0 else { return false }
+        let norm = Self.normalizedMessageText(msg.text)
+        // Own messages store the local send time and the raw text, while the
+        // replay carries the server time and server-rendered HTML. The wider
+        // window and the normalized text absorb that skew.
+        let window: TimeInterval = msg.isFromMe ? 15.0 : 1.5
+        return msgs.suffix(200).contains {
+            guard $0.isFromMe == msg.isFromMe,
+                  abs($0.timestamp.timeIntervalSince(msg.timestamp)) < window else { return false }
+            if norm.isEmpty {
+                // A pure image message normalizes to "". The img id changes
+                // between replays, so compare the image bytes instead.
+                if let data = msg.imageData { return $0.imageData == data }
+                return $0.text == msg.text
+            }
+            return Self.normalizedMessageText($0.text) == norm
+        }
+    }
+
+    // Echoes of an own send come back with server-rendered HTML, so an
+    // exact-text comparison fails. Each local send records its normalized
+    // text here; SEND-flagged bridge deliveries within the window match
+    // against it. Messages sent from another device have no entry and
+    // pass through.
+    private var recentLocalSends: [(contactID: UUID, normalizedText: String, sentAt: Date)] = []
+    private let localSendEchoWindow: TimeInterval = 60
+
+    /// Reduce a message to comparable plain text: tags out, basic
+    /// entities decoded, whitespace collapsed.
+    static func normalizedMessageText(_ s: String) -> String {
+        var t = s.replacingOccurrences(of: "<[^>]+>", with: " ", options: .regularExpression)
+        for (entity, ch) in [("&nbsp;", " "), ("&quot;", "\""), ("&apos;", "'"), ("&#39;", "'"), ("&lt;", "<"), ("&gt;", ">"), ("&amp;", "&")] {
+            t = t.replacingOccurrences(of: entity, with: ch)
+        }
+        t = t.replacingOccurrences(of: "\\s+", with: " ", options: .regularExpression)
+        return t.trimmingCharacters(in: .whitespacesAndNewlines)
+    }
+
+    func recordLocalSend(contactID: UUID, text: String) {
+        let now = Date()
+        recentLocalSends.removeAll { now.timeIntervalSince($0.sentAt) > localSendEchoWindow }
+        recentLocalSends.append((contactID, Self.normalizedMessageText(text), now))
+    }
+
+    /// True when a SEND-flagged bridge delivery is the echo of a send this
+    /// app already appended locally. The entry stays until it expires:
+    /// protocols can echo the same send more than once.
+    private func isLocalSendEcho(contactID: UUID, text: String) -> Bool {
+        let norm = Self.normalizedMessageText(text)
+        // A pure image echo normalizes to "". An empty match would collide
+        // with any other image; let the history dedupe handle those.
+        guard !norm.isEmpty else { return false }
+        let now = Date()
+        return recentLocalSends.contains {
+            $0.contactID == contactID && $0.normalizedText == norm
+                && now.timeIntervalSince($0.sentAt) <= localSendEchoWindow
+        }
+    }
+
+    /// A chat exists in the libpurple buddy list but is not joined yet.
+    /// Group chats and Teams meeting chats arrive through this path.
+    func onChatListed(roomName: String, title: String, username: String, protocolId: String) {
         let proto = AccountProtocol.allCases.first(where: { $0.purpleProtocolID == protocolId })
-        // libpurple/the prpl may normalize the room name we asked to join (e.g. XMPP MUC
-        // JIDs); reconcile our optimistically-created Contact's handle to whatever
-        // libpurple actually settled on, so incoming chat messages (tagged with that
-        // handle) route back to it.
+        let displayTitle = title.isEmpty ? roomName : title
+        let isMeeting = roomName.hasPrefix("19:meeting_")
+        let groupName = isMeeting ? t("Meetings") : t("Groups")
+
+        // The account is part of the key. Two accounts can list the same room id.
+        if let idx = contacts.firstIndex(where: {
+            $0.isGroupChat && $0.handle == roomName
+                && (username.isEmpty || $0.accountUsername == nil || $0.accountUsername == username)
+        }) {
+            // A later pass carries the real title once the plugin resolves it.
+            if displayTitle != roomName && contacts[idx].name != displayTitle {
+                contacts[idx].name = displayTitle
+                saveContactsToDefaults()
+            }
+            return
+        }
+
+        let newContact = Contact(
+            name: displayTitle,
+            handle: roomName,
+            status: .available,
+            customStatusMessage: isMeeting ? t("Meeting") : t("Group / Channel"),
+            group: groupName,
+            accountProtocol: proto ?? .teams,
+            accountUsername: username.isEmpty ? nil : username,
+            isGroupChat: true
+        )
+        createGroup(name: groupName)
+        contacts.append(newContact)
+        saveContactsToDefaults()
+    }
+
+    func onChatUnlisted(roomName: String, username: String, protocolId: String) {
+        // A joined chat stays open even when the plugin drops the list entry.
+        guard !joinedChatRooms.contains(roomName) else { return }
+        let before = contacts.count
+        contacts.removeAll(where: {
+            $0.isGroupChat && $0.handle == roomName
+                && (username.isEmpty || $0.accountUsername == nil || $0.accountUsername == username)
+        })
+        if contacts.count != before {
+            saveContactsToDefaults()
+        }
+    }
+
+    func onChatJoined(roomName: String, username: String, protocolId: String) {
+        joinedChatRooms.insert(roomName)
+        let proto = AccountProtocol.allCases.first(where: { $0.purpleProtocolID == protocolId })
+        // libpurple can normalize the room name.
+        // The code reconciles the contact handle to the libpurple room name.
+        // This routes incoming chat messages back to the contact.
         if let idx = contacts.firstIndex(where: {
             $0.isGroupChat && $0.accountUsername == username && (proto == nil || $0.accountProtocol == proto)
                 && $0.handle != roomName && (roomName.hasPrefix($0.handle) || $0.handle.hasPrefix(roomName))
@@ -983,44 +1283,69 @@ public final class PurpleBridgeService {
                 name: roomName,
                 handle: roomName,
                 status: .available,
-                customStatusMessage: "Grupo / Canal",
-                group: "Grupos",
+                customStatusMessage: t("Group / Channel"),
+                group: t("Groups"),
                 accountProtocol: proto ?? .teams,
                 accountUsername: username,
                 isGroupChat: true
             )
-            createGroup(name: "Grupos")
+            createGroup(name: t("Groups"))
             contacts.append(newContact)
             saveContactsToDefaults()
         }
     }
 
     func onChatLeft(roomName: String, username: String, protocolId: String) {
-        // leaveGroupChat() already removes the local Contact when the user explicitly
-        // leaves; this fires for the libpurple side of that (or if the server kicked us),
-        // and there's no separate "kicked" UI surface to update yet.
+        // leaveGroupChat() removes the local contact when the user leaves.
+        // This fires for the libpurple side or when the server kicks the user.
+        // There is no UI for kicks yet.
+        joinedChatRooms.remove(roomName)
     }
 
-    func onChatMessage(roomName: String, sender: String, text: String, isFromMe: Bool) {
+    /// Map a raw protocol sender id to a display name. Teams system events
+    /// arrive with "8:orgid:<uuid>", "orgid:<uuid>", or the thread id as the
+    /// sender. Returns nil when the sender is the thread itself: the event
+    /// has no person to attribute and the UI hides the sender line.
+    func resolveSenderDisplayName(_ sender: String, in chat: Contact?) -> String? {
+        if sender.isEmpty { return nil }
+        if sender.contains("@thread") || sender == chat?.handle { return nil }
+        var handle = sender
+        if handle.hasPrefix("8:") { handle.removeFirst(2) }
+        // Contacts carry the resolved profile name. Participants can still
+        // hold the raw roster id, so they only count with a real name.
+        if let known = contacts.first(where: { !$0.isGroupChat && ($0.handle == handle || $0.handle == sender) }) {
+            return known.displayName
+        }
+        if let participant = chat?.groupParticipants.first(where: {
+            ($0.handle == handle || $0.handle == sender) && $0.displayName != $0.handle
+        }) {
+            return participant.displayName
+        }
+        return sender
+    }
+
+    func onChatMessage(roomName: String, sender: String, text: String, isFromMe: Bool, timestamp: Int64 = 0, isSystem: Bool = false) {
         guard let c = contacts.first(where: { $0.isGroupChat && $0.handle == roomName }) else { return }
         if !isFromMe && c.isBlocked { return }
 
         let senderName = isFromMe ? "Me" : (sender.isEmpty ? c.displayName : sender)
-        let newMsg = ChatMessage(senderName: senderName, isFromMe: isFromMe, text: text)
+        // timestamp 0 means libpurple did not carry a message time.
+        let msgDate = timestamp > 0 ? Date(timeIntervalSince1970: TimeInterval(timestamp)) : Date()
+        let newMsg = ChatMessage(senderName: senderName, isFromMe: isFromMe, text: text, timestamp: msgDate, isSystemEvent: isSystem)
+        if newMsg.isMeetingMetadataEvent { return }
 
-        if messagesPerContact[c.id] != nil {
-            if let last = messagesPerContact[c.id]?.last, last.isFromMe == isFromMe, last.text == text, abs(Date().timeIntervalSince(last.timestamp)) < 3.0 {
-                return
-            }
-            messagesPerContact[c.id]?.append(newMsg)
-        } else {
-            var existing = ChatLogStore.shared.loadMessages(for: c.handle) ?? []
-            if let last = existing.last, last.isFromMe == isFromMe, last.text == text, abs(Date().timeIntervalSince(last.timestamp)) < 3.0 {
-                return
-            }
-            existing.append(newMsg)
-            messagesPerContact[c.id] = existing
+        if isFromMe && isLocalSendEcho(contactID: c.id, text: text) {
+            return
         }
+        var msgs = messagesPerContact[c.id] ?? (ChatLogStore.shared.loadMessages(for: c.handle) ?? [])
+        if let last = msgs.last, last.isFromMe == isFromMe, last.text == text, abs(Date().timeIntervalSince(last.timestamp)) < 3.0 {
+            return
+        }
+        if isHistoryDuplicate(newMsg, in: msgs, timestamp: timestamp) {
+            return
+        }
+        msgs.append(newMsg)
+        messagesPerContact[c.id] = msgs
 
         if let updatedMsgs = messagesPerContact[c.id] {
             ChatLogStore.shared.saveMessages(updatedMsgs, for: c.handle)
@@ -1036,13 +1361,25 @@ public final class PurpleBridgeService {
         }
     }
 
-    /// Fired for each occupant of a joined chat (both the initial roster, where
-    /// `newArrival` is false, and later real joins, where it's true). Matches the room the
-    /// same way onChatMessage does -- by handle -- and dedupes by participant handle.
+    /// This fires for each occupant of a joined chat.
+    /// This applies to the initial roster and later joins.
+    /// This matches the room by handle.
+    /// This removes duplicates by participant handle.
     func onChatBuddyJoined(roomName: String, buddyName: String, newArrival: Bool) {
         guard let idx = contacts.firstIndex(where: { $0.isGroupChat && $0.handle == roomName }) else { return }
-        guard !contacts[idx].groupParticipants.contains(where: { $0.handle == buddyName }) else { return }
-        let participant = GroupParticipant(name: buddyName, handle: buddyName, status: .available)
+        // The roster delivers raw protocol ids. A known contact provides
+        // the profile name.
+        let stripped = buddyName.hasPrefix("8:") ? String(buddyName.dropFirst(2)) : buddyName
+        let knownName = contacts.first(where: { !$0.isGroupChat && ($0.handle == stripped || $0.handle == buddyName) })?.displayName
+        if let pIdx = contacts[idx].groupParticipants.firstIndex(where: { $0.handle == buddyName }) {
+            // A participant stored with the raw id gets the name once known.
+            if let knownName, contacts[idx].groupParticipants[pIdx].name == buddyName {
+                contacts[idx].groupParticipants[pIdx].name = knownName
+                saveContactsToDefaults()
+            }
+            return
+        }
+        let participant = GroupParticipant(name: knownName ?? buddyName, handle: buddyName, status: .available)
         contacts[idx].groupParticipants.append(participant)
         saveContactsToDefaults()
     }
@@ -1069,13 +1406,17 @@ public final class PurpleBridgeService {
         }
     }
     
-    private static let handleMessageCallback: adium_purple_on_message_cb = { senderHandle, messageText, isFromMe in
+    private static let handleMessageCallback: adium_purple_on_message_cb = { senderHandle, messageText, isFromMe, isSystem, protocolId, accountUsername, timestamp, imageData, imageSize in
         guard let senderHandle = senderHandle, let messageText = messageText else { return }
         let hStr = String(cString: senderHandle)
         let mStr = String(cString: messageText)
-        
+        let pStr = protocolId != nil ? String(cString: protocolId!) : ""
+        let uStr = accountUsername != nil ? String(cString: accountUsername!) : ""
+
+        let data = imageData != nil && imageSize > 0 ? Data(bytes: imageData!, count: imageSize) : nil
+
         DispatchQueue.main.async {
-            PurpleBridgeService.shared.onMessageReceived(senderHandle: hStr, text: mStr, isFromMe: isFromMe)
+            PurpleBridgeService.shared.onMessageReceived(senderHandle: hStr, text: mStr, isFromMe: isFromMe, protocolId: pStr.isEmpty ? nil : pStr, accountUsername: uStr.isEmpty ? nil : uStr, image: data, timestamp: timestamp, isSystem: isSystem)
         }
     }
     
@@ -1132,13 +1473,14 @@ public final class PurpleBridgeService {
         alert.accessoryView = field
         alert.window.initialFirstResponder = field
 
-        // Modal is acceptable here: PurpleBridgeService is @MainActor and libpurple runs
-        // its own thread, so blocking the main thread on this alert doesn't stall network
-        // I/O — only other UI interaction, same as any other app-modal dialog.
+        // Modal dialogs are acceptable here.
+        // PurpleBridgeService is MainActor.
+        // libpurple runs its own thread.
+        // This modal does not block network I/O.
         let response = alert.runModal()
 
-        // libpurple may have already closed this request out from under the alert (e.g.
-        // account disconnected while the user was looking at it); if so, drop the response.
+        // libpurple can close this request before the user responds.
+        // This drops the response if the request is closed.
         guard pendingRequestAddrs.remove(addr) != nil else { return }
 
         if response == .alertFirstButtonReturn {
@@ -1179,6 +1521,17 @@ public final class PurpleBridgeService {
     func onRequestClose(requestHandle: RequestHandleWrapper) {
         let addr = UInt(bitPattern: requestHandle.rawPointer)
         pendingRequestAddrs.remove(addr)
+    }
+
+    func onNotifyMessage(type: Int32, title: String, primary: String, secondary: String) {
+        let alert = NSAlert()
+        alert.alertStyle = type == 0 ? .critical : (type == 1 ? .warning : .informational)
+        alert.messageText = primary.isEmpty ? title : primary
+        if !secondary.isEmpty {
+            alert.informativeText = secondary
+        }
+        alert.addButton(withTitle: t("OK"))
+        alert.runModal()
     }
     
     // MARK: - Extended C Callback Definitions
@@ -1288,14 +1641,14 @@ public final class PurpleBridgeService {
         }
     }
 
-    private static let handleChatMessageCallback: adium_purple_on_chat_message_cb = { roomName, sender, messageText, isFromMe in
+    private static let handleChatMessageCallback: adium_purple_on_chat_message_cb = { roomName, sender, messageText, isFromMe, isSystem, timestamp in
         guard let roomName = roomName, let messageText = messageText else { return }
         let rStr = String(cString: roomName)
         let sStr = sender != nil ? String(cString: sender!) : ""
         let mStr = String(cString: messageText)
 
         DispatchQueue.main.async {
-            PurpleBridgeService.shared.onChatMessage(roomName: rStr, sender: sStr, text: mStr, isFromMe: isFromMe)
+            PurpleBridgeService.shared.onChatMessage(roomName: rStr, sender: sStr, text: mStr, isFromMe: isFromMe, timestamp: timestamp, isSystem: isSystem)
         }
     }
 
@@ -1316,6 +1669,39 @@ public final class PurpleBridgeService {
 
         DispatchQueue.main.async {
             PurpleBridgeService.shared.onChatBuddyLeft(roomName: rStr, buddyName: bStr)
+        }
+    }
+
+    private static let handleChatListedCallback: adium_purple_on_chat_listed_cb = { roomName, title, groupName, username, protocolId in
+        guard let roomName = roomName else { return }
+        let rStr = String(cString: roomName)
+        let tStr = title != nil ? String(cString: title!) : ""
+        let uStr = username != nil ? String(cString: username!) : ""
+        let pStr = protocolId != nil ? String(cString: protocolId!) : ""
+
+        DispatchQueue.main.async {
+            PurpleBridgeService.shared.onChatListed(roomName: rStr, title: tStr, username: uStr, protocolId: pStr)
+        }
+    }
+
+    private static let handleChatUnlistedCallback: adium_purple_on_chat_unlisted_cb = { roomName, username, protocolId in
+        guard let roomName = roomName else { return }
+        let rStr = String(cString: roomName)
+        let uStr = username != nil ? String(cString: username!) : ""
+        let pStr = protocolId != nil ? String(cString: protocolId!) : ""
+
+        DispatchQueue.main.async {
+            PurpleBridgeService.shared.onChatUnlisted(roomName: rStr, username: uStr, protocolId: pStr)
+        }
+    }
+
+    private static let handleNotifyMessageCallback: adium_purple_on_notify_message_cb = { type, title, primary, secondary in
+        let tStr = title != nil ? String(cString: title!) : ""
+        let pStr = primary != nil ? String(cString: primary!) : ""
+        let sStr = secondary != nil ? String(cString: secondary!) : ""
+
+        DispatchQueue.main.async {
+            PurpleBridgeService.shared.onNotifyMessage(type: type, title: tStr, primary: pStr, secondary: sStr)
         }
     }
 }

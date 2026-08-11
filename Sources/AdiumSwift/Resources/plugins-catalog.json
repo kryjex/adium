@@ -1,0 +1,37 @@
+{
+  "catalogVersion": 1,
+  "plugins": [
+    {
+      "id": "purple-teams",
+      "name": "Microsoft Teams",
+      "filename": "libteams.so",
+      "protocolId": "prpl-eionrobb-msteams",
+      "description": {
+        "en": "Microsoft Teams chat, group chats, and call links through the Teams web services.",
+        "es": "Chat de Microsoft Teams, chats grupales y enlaces de llamada a través de los servicios web de Teams."
+      },
+      "version": "2026.06.15",
+      "binaryUrl": null,
+      "sha256": null,
+      "sourceUrl": "https://github.com/EionRobb/purple-teams",
+      "sourceRef": "f903669b337ad8efabf134595147cc2db039de7a",
+      "license": "GPL-3.0"
+    },
+    {
+      "id": "purple-gowhatsapp",
+      "name": "WhatsApp (whatsmeow)",
+      "filename": "libwhatsmeow.so",
+      "protocolId": "prpl-hehoe-whatsmeow",
+      "description": {
+        "en": "WhatsApp messaging through the whatsmeow library, with QR-code device pairing.",
+        "es": "Mensajería de WhatsApp mediante la librería whatsmeow, con vinculación por código QR."
+      },
+      "version": "2026.03.29",
+      "binaryUrl": null,
+      "sha256": null,
+      "sourceUrl": "https://github.com/hoehermann/purple-gowhatsapp",
+      "sourceRef": "5a436315caefd3b89c2b631a7b8028742e58f047",
+      "license": "GPL-3.0"
+    }
+  ]
+}

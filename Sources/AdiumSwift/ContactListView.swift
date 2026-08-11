@@ -41,7 +41,7 @@ public struct ContactListView: View {
         )
     }
     
-    // Structure representing items to render per group
+    // This structure represents items to render per group.
     struct GroupSectionData {
         let group: ContactGroup
         let items: [DisplayItem]
@@ -81,10 +81,10 @@ public struct ContactListView: View {
             }
         }
 
-        // Metacontact membership spans groups: a contact keeps its own `group`,
-        // but if it belongs to a metacontact it should only ever render as part
-        // of that metacontact's row (anchored to the primary contact's group),
-        // never standalone in any group section.
+        // Metacontact membership spans groups.
+        // A contact keeps its own group.
+        // It only renders as part of the metacontact row.
+        // It does not render standalone in a group section.
         var membersByMetacontactID: [UUID: [Contact]] = [:]
         for c in bridge.contacts {
             if let metaID = c.metacontactID {
@@ -124,9 +124,8 @@ public struct ContactListView: View {
                 items.append(.contact(c))
             }
 
-            // Hide the section when it has nothing to show after filtering, unless
-            // it's a genuinely empty group and no search/status filter is active
-            // (so users can still see newly created empty groups).
+            // This hides the section when it is empty after filtering.
+            // This shows the section when it is a new empty group without filters active.
             if items.isEmpty && (isFilterActive || !groupContacts.isEmpty) {
                 return nil
             }
@@ -173,20 +172,20 @@ public struct ContactListView: View {
     
     public var body: some View {
         VStack(spacing: 0) {
-            // Header: My Status Bar (Classic Adium Header)
             HStack(spacing: 8) {
                 Circle()
                     .fill(statusColor(bridge.myStatus))
                     .frame(width: 10, height: 10)
+                    .accessibilityHidden(true)
                 
                 Menu {
                     ForEach(OnlineStatus.allCases, id: \.self) { status in
                         Button(action: { bridge.setUserStatus(status) }) {
-                            Label(status.rawValue, systemImage: status.iconName)
+                            Label(statusLabel(status), systemImage: status.iconName)
                         }
                     }
                 } label: {
-                    Text(bridge.myStatus.rawValue)
+                    Text(statusLabel(bridge.myStatus))
                         .font(.system(size: 11, weight: .semibold))
                         .foregroundColor(.primary)
                 }
@@ -194,13 +193,12 @@ public struct ContactListView: View {
                 
                 Spacer()
                 
-                // Filter & Sort Menu
                 Menu {
-                    Toggle("Mostrar Desconectados", isOn: $showOfflineContacts)
+                    Toggle(t("Show Offline Contacts"), isOn: $showOfflineContacts)
                     Divider()
-                    Picker("Ordenamiento", selection: $sortOrderRaw) {
+                    Picker(t("Sort Order"), selection: $sortOrderRaw) {
                         ForEach(ContactSortOrder.allCases, id: \.rawValue) { sort in
-                            Text(sort.rawValue).tag(sort.rawValue)
+                            Text(sort.displayName).tag(sort.rawValue)
                         }
                     }
                 } label: {
@@ -208,48 +206,48 @@ public struct ContactListView: View {
                         .font(.system(size: 12))
                 }
                 .menuStyle(.borderlessButton)
-                .help("Filtrado y Ordenamiento")
+                .help(t("Filter and Sort"))
+                .accessibilityLabel(t("Filter and Sort"))
                 
-                // Add Group Button
                 Button(action: { showCreateGroupSheet = true }) {
                     Image(systemName: "folder.badge.plus")
                         .font(.system(size: 12))
                 }
                 .buttonStyle(.plain)
-                .help("Crear nuevo grupo")
+                .help(t("Create new group"))
+                .accessibilityLabel(t("Create new group"))
                 
-                // Transcript Viewer Button
                 Button(action: { TranscriptViewerWindowController.shared.show() }) {
                     Image(systemName: "clock.arrow.circlepath")
                         .font(.system(size: 12))
                 }
                 .buttonStyle(.plain)
-                .help("Abrir visor de transcripciones e historial (⌘⌥T / ⌘⇧T)")
+                .help(t("Open transcript and history viewer (⌘⌥T / ⌘⇧T)"))
+                .accessibilityLabel(t("Open transcript viewer"))
                 
-                // File Transfers Button
                 Button(action: { FileTransferWindowController.shared.show() }) {
                     Image(systemName: "arrow.up.arrow.down.circle")
                         .font(.system(size: 12))
                 }
                 .buttonStyle(.plain)
-                .help("Transferencias de archivos (⌘⌥L)")
+                .help(t("File transfers (⌘⌥L)"))
+                .accessibilityLabel(t("File transfers"))
                 
-                // Add Account Button
                 Button(action: { showAddAccountSheet = true }) {
                     Image(systemName: "plus")
                         .font(.system(size: 12, weight: .bold))
                 }
                 .buttonStyle(.plain)
-                .help("Añadir nueva cuenta (⌘⇧A)")
+                .help(t("Add new account (⌘⇧A)"))
+                .accessibilityLabel(t("Add Account"))
             }
             .padding(.horizontal, 10)
             .padding(.vertical, 6)
             .background(Material.bar)
 
-            // Custom Status Message Row
             HStack(spacing: 4) {
                 if isEditingStatusMessage {
-                    TextField("Mensaje de estado…", text: $statusMessageDraft)
+                    TextField(t("Status message…"), text: $statusMessageDraft)
                         .textFieldStyle(.plain)
                         .font(.system(size: 10))
                         .focused($isStatusMessageFocused)
@@ -261,7 +259,8 @@ public struct ContactListView: View {
                             .font(.system(size: 10))
                     }
                     .buttonStyle(.plain)
-                    .help("Guardar mensaje de estado")
+                    .help(t("Save status message"))
+                    .accessibilityLabel(t("Save status message"))
                 } else {
                     Button(action: {
                         statusMessageDraft = bridge.myStatusMessage
@@ -270,14 +269,14 @@ public struct ContactListView: View {
                         HStack(spacing: 4) {
                             Image(systemName: "pencil")
                                 .font(.system(size: 8))
-                            Text(bridge.myStatusMessage.isEmpty ? "Añadir mensaje de estado…" : bridge.myStatusMessage)
+                            Text(bridge.myStatusMessage.isEmpty ? t("Add status message…") : bridge.myStatusMessage)
                                 .font(.system(size: 9.5))
                                 .lineLimit(1)
                         }
                         .foregroundColor(.secondary)
                     }
                     .buttonStyle(.plain)
-                    .help("Establecer un mensaje de estado personalizado")
+                    .help(t("Set a custom status message"))
 
                     Spacer()
                 }
@@ -288,21 +287,21 @@ public struct ContactListView: View {
 
             Divider()
 
-            // Connection Error Banner
             if bridge.hasAccountError {
                 HStack(spacing: 6) {
                     Image(systemName: "exclamationmark.triangle.fill")
                         .foregroundColor(.yellow)
                         .font(.system(size: 10))
-                    
-                    Text(bridge.accountErrorSummary ?? "Error de conexión")
+                        .accessibilityHidden(true)
+
+                    Text(bridge.accountErrorSummary ?? t("Connection error"))
                         .font(.system(size: 9))
                         .foregroundColor(.primary)
                         .lineLimit(1)
                     
                     Spacer()
                     
-                    Button("Reconectar") {
+                    Button(t("Reconnect")) {
                         bridge.reconnectAccounts()
                     }
                     .buttonStyle(.bordered)
@@ -316,12 +315,12 @@ public struct ContactListView: View {
                 Divider()
             }
             
-            // Search Bar
             HStack {
                 Image(systemName: "magnifyingglass")
                     .foregroundColor(.secondary)
                     .font(.system(size: 10))
-                TextField("Buscar contacto...", text: $searchText)
+                    .accessibilityHidden(true)
+                TextField(t("Search contacts..."), text: $searchText)
                     .focused($isSearchFocused)
                     .textFieldStyle(.plain)
                     .font(.system(size: 11))
@@ -332,6 +331,7 @@ public struct ContactListView: View {
                             .font(.system(size: 10))
                     }
                     .buttonStyle(.plain)
+                    .accessibilityLabel(t("Clear search"))
                 }
             }
             .padding(.horizontal, 8)
@@ -349,26 +349,26 @@ public struct ContactListView: View {
             
             Divider()
             
-            // Body: Empty state vs Contact list
             if bridge.accounts.isEmpty {
                 VStack(spacing: 12) {
                     Spacer()
                     Image(systemName: "person.crop.circle.badge.plus")
                         .font(.system(size: 36))
                         .foregroundColor(.accentColor)
-                    
-                    Text("Sin Cuentas Configuradas")
+                        .accessibilityHidden(true)
+
+                    Text(t("No Accounts Configured"))
                         .font(.system(size: 13, weight: .bold))
                         .foregroundColor(.primary)
                     
-                    Text("Añade tu cuenta de Microsoft Teams, WhatsApp o XMPP para cargar tus contactos y comenzar a chatear.")
+                    Text(t("Add your Microsoft Teams, WhatsApp, or XMPP account to load your contacts and start chatting."))
                         .font(.system(size: 10))
                         .foregroundColor(.secondary)
                         .multilineTextAlignment(.center)
                         .padding(.horizontal, 16)
                     
                     Button(action: { showAddAccountSheet = true }) {
-                        Label("Añadir Cuenta", systemImage: "plus.circle.fill")
+                        Label(t("Add Account"), systemImage: "plus.circle.fill")
                             .font(.system(size: 11, weight: .medium))
                     }
                     .buttonStyle(.borderedProminent)
@@ -383,25 +383,25 @@ public struct ContactListView: View {
                     ProgressView()
                         .controlSize(.small)
                     
-                    Text(bridge.hasAccountError ? "Error al conectar cuenta" : "Conectando cuenta...")
+                    Text(bridge.hasAccountError ? t("Error connecting account") : t("Connecting account..."))
                         .font(.system(size: 12, weight: .bold))
                         .foregroundColor(.primary)
                     
-                    Text("Conectado a \(bridge.accounts.first?.username ?? ""). Esperando eventos de libpurple...")
+                    Text(t("Connected to \(bridge.accounts.first?.username ?? ""). Waiting for libpurple events..."))
                         .font(.system(size: 10))
                         .foregroundColor(.secondary)
                         .multilineTextAlignment(.center)
                         .padding(.horizontal, 16)
                     
                     HStack(spacing: 8) {
-                        Button("Reconectar") {
+                        Button(t("Reconnect")) {
                             bridge.reconnectAccounts()
                         }
                         .buttonStyle(.borderedProminent)
                         .controlSize(.small)
                         .font(.system(size: 10))
                         
-                        Button("Gestionar Cuentas") {
+                        Button(t("Manage Accounts")) {
                             showAddAccountSheet = true
                         }
                         .buttonStyle(.borderless)
@@ -451,11 +451,11 @@ public struct ContactListView: View {
             
             Divider()
             
-            // Status Footer (Bridge state)
             HStack(spacing: 6) {
                 Circle()
                     .fill(bridge.hasAccountError ? Color.red : (bridge.isLibpurpleLoaded ? Color.green : Color.orange))
                     .frame(width: 6, height: 6)
+                    .accessibilityHidden(true)
                 Text(bridge.connectionState)
                     .font(.system(size: 9))
                     .foregroundColor(.secondary)
@@ -463,12 +463,12 @@ public struct ContactListView: View {
                 Spacer()
                 if bridge.accounts.contains(where: { !$0.isConnected }) {
                     Button(action: { bridge.reconnectAccounts() }) {
-                        Label("Reconectar", systemImage: "arrow.clockwise")
+                        Label(t("Reconnect"), systemImage: "arrow.clockwise")
                             .font(.system(size: 9))
                     }
                     .buttonStyle(.plain)
                     .foregroundColor(.accentColor)
-                    .help("Reconectar cuentas desconectadas")
+                    .help(t("Reconnect disconnected accounts"))
                 }
             }
             .padding(.horizontal, 8)
@@ -518,7 +518,7 @@ public struct ContactListView: View {
     }
 }
 
-// Wrapper struct for sheet item binding
+// This struct wraps the sheet item binding.
 struct GroupRenameWrapper: Identifiable {
     var id: String { name }
     let name: String
@@ -542,6 +542,7 @@ struct GroupHeaderView: View {
                     .foregroundColor(.secondary)
             }
             .buttonStyle(.plain)
+            .accessibilityLabel(group.isExpanded ? t("Collapse group") : t("Expand group"))
             
             Text(group.name)
                 .font(.system(size: 10, weight: .bold))
@@ -558,13 +559,13 @@ struct GroupHeaderView: View {
         }
         .contentShape(Rectangle())
         .contextMenu {
-            Button("Renombrar Grupo...") {
+            Button(t("Rename Group...")) {
                 onRename()
             }
             Button(role: .destructive) {
                 onDelete()
             } label: {
-                Label("Eliminar Grupo", systemImage: "trash")
+                Label(t("Delete Group"), systemImage: "trash")
             }
         }
     }
@@ -625,11 +626,13 @@ struct ContactAvatarView: View {
                     .font(.system(size: size * 0.38))
                     .foregroundColor(.red)
                     .background(Circle().fill(Color.white))
+                    .accessibilityLabel(t("Blocked"))
             } else {
                 Circle()
                     .fill(statusColor(status))
                     .frame(width: size * 0.32, height: size * 0.32)
                     .overlay(Circle().stroke(Color(nsColor: .windowBackgroundColor), lineWidth: 1))
+                    .accessibilityLabel(t("Status: \(status.rawValue)"))
             }
         }
     }
@@ -673,13 +676,15 @@ struct ContactRowView: View {
                         Image(systemName: "pencil")
                             .font(.system(size: 8))
                             .foregroundColor(.secondary)
+                            .accessibilityHidden(true)
                     }
-                    
+
                     Spacer()
-                    
+
                     Image(systemName: contact.accountProtocol.iconName)
                         .font(.system(size: 9))
                         .foregroundColor(.secondary)
+                        .accessibilityLabel(contact.accountProtocol.rawValue)
                 }
                 
                 if let msg = contact.customStatusMessage, !msg.isEmpty {
@@ -697,26 +702,26 @@ struct ContactRowView: View {
         }
         .padding(.vertical, 2)
         .contextMenu {
-            Button("Renombrar / Establecer Alias...") {
+            Button(t("Rename / Set Alias...")) {
                 onRename()
             }
             if contact.alias != nil {
-                Button("Quitar Alias") {
+                Button(t("Remove Alias")) {
                     bridge.setAlias(nil, for: contact.id)
                 }
             }
-            
-            Button("Cambiar Icono / Avatar...") {
+
+            Button(t("Change Icon / Avatar...")) {
                 onSelectAvatar()
             }
-            
+
             Divider()
-            
-            Button("Combinar en Metacontacto...") {
+
+            Button(t("Combine into Metacontact...")) {
                 onCombine()
             }
-            
-            Menu("Mover a Grupo") {
+
+            Menu(t("Move to Group")) {
                 ForEach(bridge.contactGroups, id: \.id) { group in
                     Button(group.name) {
                         bridge.moveContact(contact.id, toGroup: group.name)
@@ -726,7 +731,7 @@ struct ContactRowView: View {
             
             Divider()
             
-            Button(contact.isBlocked ? "Desbloquear Contacto" : "Bloquear Contacto") {
+            Button(contact.isBlocked ? t("Unblock Contact") : t("Block Contact")) {
                 bridge.toggleBlockContact(contact.id)
             }
         }
@@ -763,6 +768,7 @@ struct MetacontactRowView: View {
                         .foregroundColor(.secondary)
                 }
                 .buttonStyle(.plain)
+                .accessibilityLabel(isExpanded ? t("Collapse metacontact") : t("Expand metacontact"))
                 
                 ContactAvatarView(
                     name: metacontact.name,
@@ -778,14 +784,14 @@ struct MetacontactRowView: View {
                             .font(.system(size: 11, weight: .bold))
                             .lineLimit(1)
                         
-                        Label("Metacontacto", systemImage: "person.2.fill")
+                        Label(t("Metacontact"), systemImage: "person.2.fill")
                             .labelStyle(.iconOnly)
                             .font(.system(size: 9))
                             .foregroundColor(.accentColor)
                         
                         Spacer()
                         
-                        // Show all bundled protocol icons
+                        // The caption below states the same protocols, so hide this row from accessibility.
                         HStack(spacing: 2) {
                             ForEach(subContacts, id: \.id) { sc in
                                 Image(systemName: sc.accountProtocol.iconName)
@@ -793,9 +799,10 @@ struct MetacontactRowView: View {
                                     .foregroundColor(sc.id == primaryContact?.id ? .accentColor : .secondary)
                             }
                         }
+                        .accessibilityHidden(true)
                     }
                     
-                    Text("\(subContacts.count) cuentas combinadas (\(primaryContact?.accountProtocol.rawValue ?? ""))")
+                    Text(t("\(subContacts.count) combined accounts (\(primaryContact?.accountProtocol.rawValue ?? ""))"))
                         .font(.system(size: 9))
                         .foregroundColor(.secondary)
                         .lineLimit(1)
@@ -804,7 +811,7 @@ struct MetacontactRowView: View {
             .padding(.vertical, 2)
             .contentShape(Rectangle())
             .contextMenu {
-                Menu("Establecer Cuenta Principal") {
+                Menu(t("Set Primary Account")) {
                     ForEach(subContacts, id: \.id) { sc in
                         Button("\(sc.displayName) (\(sc.accountProtocol.rawValue))") {
                             bridge.setPrimaryContact(contactID: sc.id, inMetacontact: metacontact.id)
@@ -815,7 +822,7 @@ struct MetacontactRowView: View {
                 Button(role: .destructive) {
                     bridge.unlinkMetacontact(metacontact.id)
                 } label: {
-                    Label("Desvincular Metacontacto", systemImage: "link.badge.plus")
+                    Label(t("Unlink Metacontact"), systemImage: "link.badge.plus")
                 }
             }
             
@@ -826,10 +833,12 @@ struct MetacontactRowView: View {
                             Circle()
                                 .fill(sc.id == primaryContact?.id ? Color.accentColor : Color.clear)
                                 .frame(width: 4, height: 4)
-                            
+                                .accessibilityHidden(true)
+
                             Image(systemName: sc.accountProtocol.iconName)
                                 .font(.system(size: 8))
                                 .foregroundColor(.secondary)
+                                .accessibilityLabel(sc.accountProtocol.rawValue)
                             
                             Text(sc.displayName)
                                 .font(.system(size: 10, weight: sc.id == primaryContact?.id ? .semibold : .regular))
@@ -862,18 +871,18 @@ struct CreateGroupSheet: View {
     
     var body: some View {
         VStack(spacing: 12) {
-            Text("Crear Nuevo Grupo")
+            Text(t("Create New Group"))
                 .font(.system(size: 13, weight: .bold))
-            
-            TextField("Nombre del grupo:", text: $groupName)
+
+            TextField(t("Group name:"), text: $groupName)
                 .textFieldStyle(.roundedBorder)
                 .font(.system(size: 11))
             
             HStack {
-                Button("Cancelar") { isPresented = false }
+                Button(t("Cancel")) { isPresented = false }
                     .keyboardShortcut(.cancelAction)
                 Spacer()
-                Button("Crear") {
+                Button(t("Create")) {
                     bridge.createGroup(name: groupName)
                     isPresented = false
                 }
@@ -908,25 +917,25 @@ struct RenameGroupSheet: View {
 
     var body: some View {
         VStack(spacing: 12) {
-            Text("Renombrar Grupo '\(groupName)'")
+            Text(t("Rename Group '\(groupName)'"))
                 .font(.system(size: 13, weight: .bold))
 
-            TextField("Nuevo nombre:", text: $newName)
+            TextField(t("New name:"), text: $newName)
                 .textFieldStyle(.roundedBorder)
                 .font(.system(size: 11))
                 .onAppear { newName = groupName }
 
             if isDuplicateName {
-                Text("Ya existe un grupo con ese nombre.")
+                Text(t("A group with that name already exists."))
                     .font(.system(size: 10))
                     .foregroundColor(.red)
             }
 
             HStack {
-                Button("Cancelar") { isPresented = false }
+                Button(t("Cancel")) { isPresented = false }
                     .keyboardShortcut(.cancelAction)
                 Spacer()
-                Button("Guardar") {
+                Button(t("Save")) {
                     if trimmedNewName != groupName {
                         bridge.renameGroup(oldName: groupName, newName: trimmedNewName)
                     }
@@ -949,23 +958,23 @@ struct SetAliasSheet: View {
     
     var body: some View {
         VStack(spacing: 12) {
-            Text("Renombrar Contacto (Alias Local)")
+            Text(t("Rename Contact (Local Alias)"))
                 .font(.system(size: 13, weight: .bold))
-            
-            Text("Establece un alias para '\(contact.name)' visible solo en tu lista.")
+
+            Text(t("Set an alias for '\(contact.name)' visible only in your list."))
                 .font(.system(size: 10))
                 .foregroundColor(.secondary)
-            
-            TextField("Alias:", text: $aliasText)
+
+            TextField(t("Alias:"), text: $aliasText)
                 .textFieldStyle(.roundedBorder)
                 .font(.system(size: 11))
                 .onAppear { aliasText = contact.alias ?? contact.name }
             
             HStack {
-                Button("Cancelar") { isPresented = false }
+                Button(t("Cancel")) { isPresented = false }
                     .keyboardShortcut(.cancelAction)
                 Spacer()
-                Button("Guardar") {
+                Button(t("Save")) {
                     bridge.setAlias(aliasText, for: contact.id)
                     isPresented = false
                 }
@@ -990,21 +999,21 @@ struct CombineContactsSheet: View {
     
     var body: some View {
         VStack(spacing: 12) {
-            Text("Combinar en Metacontacto")
+            Text(t("Combine into Metacontact"))
                 .font(.system(size: 13, weight: .bold))
-            
-            Text("Selecciona otro contacto para unificar sus cuentas bajo una sola entrada de metacontacto.")
+
+            Text(t("Select another contact to merge their accounts into a single metacontact entry."))
                 .font(.system(size: 10))
                 .foregroundColor(.secondary)
                 .multilineTextAlignment(.center)
             
             Form {
-                TextField("Nombre del Metacontacto:", text: $metacontactName)
+                TextField(t("Metacontact name:"), text: $metacontactName)
                     .font(.system(size: 11))
                     .onAppear { metacontactName = sourceContact.displayName }
-                
-                Picker("Combinar con:", selection: $selectedTargetID) {
-                    Text("Selecciona un contacto...").tag(UUID?.none)
+
+                Picker(t("Combine with:"), selection: $selectedTargetID) {
+                    Text(t("Select a contact...")).tag(UUID?.none)
                     ForEach(availableTargets, id: \.id) { target in
                         Text("\(target.displayName) (\(target.accountProtocol.rawValue))").tag(UUID?.some(target.id))
                     }
@@ -1014,10 +1023,10 @@ struct CombineContactsSheet: View {
             .formStyle(.grouped)
             
             HStack {
-                Button("Cancelar") { isPresented = false }
+                Button(t("Cancel")) { isPresented = false }
                     .keyboardShortcut(.cancelAction)
                 Spacer()
-                Button("Combinar") {
+                Button(t("Combine")) {
                     if let targetID = selectedTargetID {
                         bridge.combineContacts([sourceContact.id, targetID], name: metacontactName)
                     }

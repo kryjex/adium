@@ -51,11 +51,35 @@ public enum AccountProtocol: String, Codable, CaseIterable, Sendable {
         case .customLibpurple: return "prpl-custom"
         }
     }
+
+    /// This returns the canonical libpurple username for this protocol.
+    /// purple-gowhatsapp requires "<digits>@s.whatsapp.net" (see its README).
+    /// The app accepts a phone number like "+34 600 000 000" and converts it.
+    /// A username that already contains "@" passes through unchanged.
+    /// Other protocols pass through unchanged.
+    public func canonicalUsername(_ raw: String) -> String {
+        let trimmed = raw.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard self == .whatsapp, !trimmed.isEmpty, !trimmed.contains("@") else {
+            return trimmed
+        }
+        let digits = trimmed.filter(\.isNumber)
+        guard !digits.isEmpty else { return trimmed }
+        return digits + "@s.whatsapp.net"
+    }
 }
 
 public enum ContactSortOrder: String, Codable, CaseIterable {
-    case name = "Alfabetico"
-    case status = "Por Estado"
+    case name = "name"
+    case status = "status"
+
+    /// This is the localized text for menus.
+    /// The raw value stays stable because it persists in UserDefaults.
+    public var displayName: String {
+        switch self {
+        case .name: return t("By Name")
+        case .status: return t("By Status")
+        }
+    }
 }
 
 public struct ContactGroup: Identifiable, Hashable, Codable {
@@ -102,7 +126,7 @@ public struct Account: Identifiable, Hashable, Codable {
     public var isConnected: Bool
     public var connectionError: String?
     
-    // Advanced options per service
+    // Advanced options for each service
     public var server: String?
     public var port: Int?
     public var resource: String?
@@ -133,10 +157,9 @@ public struct Account: Identifiable, Hashable, Codable {
         self.customOptions = customOptions
     }
 
-    // Custom decoding for backward compatibility: `customOptions` was added after this
-    // struct was first persisted, so JSON written by older builds lacks the key. Without
-    // this, decoding throws keyNotFound and callers using `try?` silently drop all saved
-    // accounts.
+    // This decoder handles backward compatibility. Older JSON data lacks the
+    // customOptions field. Without this code, decoding throws a keyNotFound
+    // error. Callers that use try? then drop all saved accounts.
     enum CodingKeys: String, CodingKey {
         case id, username, accountProtocol, isConnected, connectionError, server, port, resource, useSSL, customOptions
     }
@@ -258,10 +281,10 @@ public struct Contact: Identifiable, Hashable, Codable {
         self.topic = topic
     }
 
-    // Custom decoding for backward compatibility: `isBlocked`, `isTyping`, `isGroupChat`
-    // and `groupParticipants` were added after this struct was first persisted. Without
-    // this, decoding JSON saved by an older build throws keyNotFound and callers using
-    // `try?` silently wipe out all saved contacts (and old backups fail to import).
+    // This decoder handles backward compatibility. Older JSON files lack the
+    // isBlocked, isTyping, isGroupChat, and groupParticipants fields. Without
+    // this code, decoding throws a keyNotFound error. Callers that use try?
+    // then erase all saved contacts, and old backups fail to import.
     enum CodingKeys: String, CodingKey {
         case id, name, handle, status, customStatusMessage, group, accountProtocol, avatarURL, accountUsername
         case alias, isBlocked, metacontactID, avatarData, isTyping
@@ -296,13 +319,54 @@ public struct ChatMessage: Identifiable, Hashable, Codable {
     public let isFromMe: Bool
     public let text: String
     public let timestamp: Date
-    
-    public init(id: UUID = UUID(), senderName: String, isFromMe: Bool, text: String, timestamp: Date = Date()) {
+    public var imageData: Data?
+    /// A protocol notice (PURPLE_MESSAGE_SYSTEM or ERROR): call events,
+    /// send failures. No person authored it; the UI centers it without
+    /// a sender line.
+    public var isSystemEvent: Bool
+
+    public init(id: UUID = UUID(), senderName: String, isFromMe: Bool, text: String, timestamp: Date = Date(), imageData: Data? = nil, isSystemEvent: Bool = false) {
         self.id = id
         self.senderName = senderName
         self.isFromMe = isFromMe
         self.text = text
         self.timestamp = timestamp
+        self.imageData = imageData
+        self.isSystemEvent = isSystemEvent
+    }
+
+    public init(from decoder: Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        id = try c.decode(UUID.self, forKey: .id)
+        senderName = try c.decode(String.self, forKey: .senderName)
+        isFromMe = try c.decode(Bool.self, forKey: .isFromMe)
+        text = try c.decode(String.self, forKey: .text)
+        timestamp = try c.decode(Date.self, forKey: .timestamp)
+        imageData = try c.decodeIfPresent(Data.self, forKey: .imageData)
+        // Logs from older versions lack this key. Callers use try?, so a
+        // plain decode here would erase saved history.
+        isSystemEvent = try c.decodeIfPresent(Bool.self, forKey: .isSystemEvent) ?? false
+    }
+}
+
+public extension ChatMessage {
+    /// Teams delivers some meeting events as a raw JSON object
+    /// (recording metadata with scopeId/callId/iCalUid). The plugin passes
+    /// the payload through as message text, sometimes with escaped quotes.
+    /// These carry no readable content and stay hidden.
+    var isMeetingMetadataEvent: Bool {
+        let trimmed = text.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard trimmed.hasPrefix("{"), trimmed.hasSuffix("}"), trimmed.count > 20 else { return false }
+        let candidates = [trimmed, trimmed.replacingOccurrences(of: "\\\"", with: "\"")]
+        for candidate in candidates {
+            guard let data = candidate.data(using: .utf8),
+                  let obj = try? JSONSerialization.jsonObject(with: data) as? [String: Any] else { continue }
+            if obj["callId"] != nil || obj["scopeId"] != nil || obj["iCalUid"] != nil {
+                return true
+            }
+            return false
+        }
+        return false
     }
 }
 

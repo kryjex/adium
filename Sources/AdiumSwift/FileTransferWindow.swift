@@ -28,7 +28,7 @@ public final class FileTransferWindowController: NSObject, NSWindowDelegate {
             defer: false
         )
         newWindow.center()
-        newWindow.title = "Transferencias de Archivos - Adium"
+        newWindow.title = t("File Transfers - Adium")
         newWindow.contentViewController = hostingController
         newWindow.isReleasedWhenClosed = false
         newWindow.delegate = self

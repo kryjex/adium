@@ -6,11 +6,13 @@ public struct PreferencesView: View {
     @AppStorage("playSoundEffects") private var playSoundEffects: Bool = true
     @AppStorage("launchAtLogin") private var launchAtLogin: Bool = false
     @AppStorage("showOfflineContacts") private var showOfflineContacts: Bool = true
+    @AppStorage(AppLanguage.defaultsKey) private var appLanguage: String = ""
     
     @State private var showAddAccountSheet = false
     @State private var accountToConfigure: Account? = nil
     @State private var selectedAccountID: UUID?
     @State private var backupStatusMessage: String? = nil
+    @State private var accountToDelete: Account? = nil
     
     public init() {}
     
@@ -20,9 +22,9 @@ public struct PreferencesView: View {
     
     public var body: some View {
         TabView {
-            // Accounts Tab
+            // Accounts tab.
             VStack(alignment: .leading, spacing: 10) {
-                Text("Cuentas Configuradas")
+                Text(t("Configured Accounts"))
                     .font(.system(size: 12, weight: .bold))
                     .padding(.horizontal, 16)
                     .padding(.top, 12)
@@ -33,11 +35,12 @@ public struct PreferencesView: View {
                         Image(systemName: "person.crop.circle.badge.plus")
                             .font(.system(size: 28))
                             .foregroundColor(.secondary)
-                        Text("No hay cuentas configuradas.")
+                            .accessibilityHidden(true)
+                        Text(t("No accounts configured."))
                             .font(.system(size: 11))
                             .foregroundColor(.secondary)
                         Button(action: { showAddAccountSheet = true }) {
-                            Label("Añadir Cuenta", systemImage: "plus")
+                            Label(t("Add Account"), systemImage: "plus")
                                 .font(.system(size: 11))
                         }
                         .buttonStyle(.borderedProminent)
@@ -54,6 +57,7 @@ public struct PreferencesView: View {
                                 Image(systemName: acc.accountProtocol.iconName)
                                     .foregroundColor(.accentColor)
                                     .font(.system(size: 13))
+                                    .accessibilityHidden(true)
                                 
                                 VStack(alignment: .leading, spacing: 1) {
                                     Text(acc.username)
@@ -64,7 +68,7 @@ public struct PreferencesView: View {
                                             .foregroundColor(.secondary)
                                         
                                         if acc.server != nil || acc.port != nil || acc.resource != nil {
-                                            Text("• Avanzada")
+                                            Text(t("• Advanced"))
                                                 .font(.system(size: 8, weight: .bold))
                                                 .foregroundColor(.accentColor)
                                         }
@@ -76,28 +80,25 @@ public struct PreferencesView: View {
                                 Circle()
                                     .fill(acc.isConnected ? Color.green : Color.gray)
                                     .frame(width: 8, height: 8)
-                                    .help(acc.isConnected ? "Conectado" : "Desconectado")
+                                    .help(acc.isConnected ? t("Connected") : t("Disconnected"))
                             }
                             .tag(acc.id)
                             .contextMenu {
-                                Button("Opciones Avanzadas...") {
+                                Button(t("Advanced Options...")) {
                                     accountToConfigure = acc
                                 }
                                 Divider()
                                 Button(role: .destructive) {
-                                    bridge.removeAccount(acc)
-                                    if selectedAccountID == acc.id {
-                                        selectedAccountID = nil
-                                    }
+                                    accountToDelete = acc
                                 } label: {
-                                    Label("Eliminar Cuenta", systemImage: "trash")
+                                    Label(t("Delete Account"), systemImage: "trash")
                                 }
                             }
                         }
                         .listStyle(.inset)
                         .cornerRadius(6)
                         
-                        // Classic macOS toolbar + / - / gear
+                        // Classic macOS toolbar.
                         HStack(spacing: 0) {
                             Button(action: { showAddAccountSheet = true }) {
                                 Image(systemName: "plus")
@@ -106,15 +107,15 @@ public struct PreferencesView: View {
                                     .contentShape(Rectangle())
                             }
                             .buttonStyle(.plain)
-                            .help("Añadir nueva cuenta")
+                            .help(t("Add new account"))
+                            .accessibilityLabel(t("Add new account"))
                             
                             Divider()
                                 .frame(height: 12)
                             
                             Button(action: {
                                 if let acc = selectedAccount {
-                                    bridge.removeAccount(acc)
-                                    selectedAccountID = nil
+                                    accountToDelete = acc
                                 }
                             }) {
                                 Image(systemName: "minus")
@@ -124,7 +125,8 @@ public struct PreferencesView: View {
                             }
                             .buttonStyle(.plain)
                             .disabled(selectedAccountID == nil)
-                            .help("Eliminar cuenta seleccionada")
+                            .help(t("Delete selected account"))
+                            .accessibilityLabel(t("Delete selected account"))
                             
                             Divider()
                                 .frame(height: 12)
@@ -134,14 +136,14 @@ public struct PreferencesView: View {
                                     accountToConfigure = acc
                                 }
                             }) {
-                                Label("Opciones Avanzadas", systemImage: "gearshape")
+                                Label(t("Advanced Options"), systemImage: "gearshape")
                                     .font(.system(size: 10, weight: .medium))
                                     .padding(.horizontal, 8)
                                     .frame(height: 22)
                             }
                             .buttonStyle(.plain)
                             .disabled(selectedAccountID == nil)
-                            .help("Opciones avanzadas de la cuenta seleccionada")
+                            .help(t("Advanced options for the selected account"))
                             
                             Spacer()
                         }
@@ -158,52 +160,73 @@ public struct PreferencesView: View {
                     .frame(height: 10)
             }
             .tabItem {
-                Label("Cuentas", systemImage: "person.2.fill")
+                Label(t("Accounts"), systemImage: "person.2.fill")
             }
             
-            // General Settings Tab
+            // General settings tab.
             VStack(alignment: .leading, spacing: 12) {
-                Toggle("Mostrar notificación al recibir un mensaje", isOn: $showNotifications)
+                Toggle(t("Show a notification when a message arrives"), isOn: $showNotifications)
                     .font(.system(size: 11))
-                Toggle("Reproducir sonido clásico de Adium al recibir mensaje", isOn: $playSoundEffects)
+                Toggle(t("Play the classic Adium sound when a message arrives"), isOn: $playSoundEffects)
                     .font(.system(size: 11))
-                Toggle("Mostrar contactos desconectados en la lista", isOn: $showOfflineContacts)
+                Toggle(t("Show offline contacts in the list"), isOn: $showOfflineContacts)
                     .font(.system(size: 11))
-                Toggle("Iniciar Adium al encender el Mac", isOn: $launchAtLogin)
+                Toggle(t("Start Adium when the Mac starts"), isOn: $launchAtLogin)
                     .font(.system(size: 11))
+
+                Divider()
+
+                Picker(t("Language:"), selection: $appLanguage) {
+                    Text(t("System default")).tag("")
+                    ForEach(AppLanguage.options) { option in
+                        Text(option.name).tag(option.code)
+                    }
+                }
+                .font(.system(size: 11))
+                .frame(maxWidth: 280, alignment: .leading)
+
+                Text(t("Restart Adium to apply the language change."))
+                    .font(.system(size: 9))
+                    .foregroundColor(.secondary)
+
                 Spacer()
             }
             .padding(16)
             .tabItem {
-                Label("General", systemImage: "gearshape.fill")
+                Label(t("General"), systemImage: "gearshape.fill")
             }
             
-            // Events Engine Settings Tab
+            // Events engine settings tab.
             EventsPreferencesTab()
                 .tabItem {
-                    Label("Eventos", systemImage: "bell.badge.fill")
+                    Label(t("Events"), systemImage: "bell.badge.fill")
                 }
 
-            
-            // Backup & Data Tab
+            // Optional protocol plugins tab.
+            PluginsPreferencesTab()
+                .tabItem {
+                    Label(t("Plugins"), systemImage: "puzzlepiece.extension.fill")
+                }
+
+            // Backup and data tab.
             VStack(alignment: .leading, spacing: 14) {
-                Text("Respaldo y Datos")
+                Text(t("Backup & Data"))
                     .font(.system(size: 13, weight: .bold))
                 
-                Text("Exporta o restaura la configuración completa de Adium, cuentas, lista de contactos y el historial de chats (sin contraseñas en claro).")
+                Text(t("Export or restore the complete Adium configuration, accounts, contact list, and chat history (without plaintext passwords)."))
                     .font(.system(size: 11))
                     .foregroundColor(.secondary)
                 
                 Divider()
                 
-                // System stats
+                // System stats.
                 VStack(alignment: .leading, spacing: 6) {
-                    Text("Resumen de Datos Actuales")
+                    Text(t("Current Data Summary"))
                         .font(.system(size: 11, weight: .semibold))
                     
                     HStack(spacing: 24) {
                         VStack(alignment: .leading) {
-                            Text("Cuentas:")
+                            Text(t("Accounts:"))
                                 .font(.system(size: 10))
                                 .foregroundColor(.secondary)
                             Text("\(bridge.accounts.count)")
@@ -211,7 +234,7 @@ public struct PreferencesView: View {
                         }
                         
                         VStack(alignment: .leading) {
-                            Text("Contactos:")
+                            Text(t("Contacts:"))
                                 .font(.system(size: 10))
                                 .foregroundColor(.secondary)
                             Text("\(bridge.contacts.count)")
@@ -219,10 +242,10 @@ public struct PreferencesView: View {
                         }
                         
                         VStack(alignment: .leading) {
-                            Text("Transcripciones:")
+                            Text(t("Transcripts:"))
                                 .font(.system(size: 10))
                                 .foregroundColor(.secondary)
-                            Text("\(ChatLogStore.shared.allLogHandles().count) chats")
+                            Text(t("\(ChatLogStore.shared.allLogHandles().count) chats"))
                                 .font(.system(size: 14, weight: .bold))
                         }
                     }
@@ -239,13 +262,13 @@ public struct PreferencesView: View {
                         BackupManager.shared.promptExportBackup { result in
                             switch result {
                             case .success(let url):
-                                backupStatusMessage = "Respaldo exportado exitosamente en \(url.lastPathComponent)"
+                                backupStatusMessage = t("Backup exported successfully to \(url.lastPathComponent)")
                             case .failure(let error):
-                                backupStatusMessage = "Error al exportar: \(error.localizedDescription)"
+                                backupStatusMessage = t("Error while exporting: \(error.localizedDescription)")
                             }
                         }
                     }) {
-                        Label("Exportar Respaldo...", systemImage: "square.and.arrow.up")
+                        Label(t("Export Backup..."), systemImage: "square.and.arrow.up")
                             .font(.system(size: 11))
                     }
                     .buttonStyle(.borderedProminent)
@@ -254,13 +277,13 @@ public struct PreferencesView: View {
                         BackupManager.shared.promptImportBackup { result in
                             switch result {
                             case .success(let url):
-                                backupStatusMessage = "Respaldo restaurado exitosamente desde \(url.lastPathComponent)"
+                                backupStatusMessage = t("Backup restored successfully from \(url.lastPathComponent)")
                             case .failure(let error):
-                                backupStatusMessage = "Error al restaurar: \(error.localizedDescription)"
+                                backupStatusMessage = t("Error while restoring: \(error.localizedDescription)")
                             }
                         }
                     }) {
-                        Label("Restaurar Respaldo...", systemImage: "square.and.arrow.down")
+                        Label(t("Restore Backup..."), systemImage: "square.and.arrow.down")
                             .font(.system(size: 11))
                     }
                     
@@ -269,7 +292,7 @@ public struct PreferencesView: View {
                     Button(action: {
                         TranscriptViewerWindowController.shared.show()
                     }) {
-                        Label("Abrir Visor", systemImage: "clock.arrow.circlepath")
+                        Label(t("Open Viewer"), systemImage: "clock.arrow.circlepath")
                             .font(.system(size: 11))
                     }
                 }
@@ -278,6 +301,7 @@ public struct PreferencesView: View {
                     HStack(spacing: 6) {
                         Image(systemName: status.contains("Error") ? "exclamationmark.triangle.fill" : "checkmark.circle.fill")
                             .foregroundColor(status.contains("Error") ? .red : .green)
+                            .accessibilityHidden(true)
                         Text(status)
                             .font(.system(size: 10))
                             .foregroundColor(.secondary)
@@ -289,7 +313,7 @@ public struct PreferencesView: View {
             }
             .padding(16)
             .tabItem {
-                Label("Respaldo y Datos", systemImage: "externaldrive.fill")
+                Label(t("Backup & Data"), systemImage: "externaldrive.fill")
             }
         }
         .frame(width: 540, height: 380)
@@ -299,6 +323,59 @@ public struct PreferencesView: View {
         .sheet(item: $accountToConfigure) { acc in
             AccountOptionsSheet(account: acc, isPresented: Binding(get: { accountToConfigure != nil }, set: { if !$0 { accountToConfigure = nil } }))
         }
+        .sheet(item: $accountToDelete) { acc in
+            DeleteAccountSheet(account: acc) { deleteLogs in
+                bridge.removeAccount(acc, deleteChatLogs: deleteLogs)
+                if selectedAccountID == acc.id {
+                    selectedAccountID = nil
+                }
+            }
+        }
+    }
+}
+
+struct DeleteAccountSheet: View {
+    let account: Account
+    let onConfirm: (_ deleteChatLogs: Bool) -> Void
+
+    @Environment(\.dismiss) private var dismiss
+    @State private var deleteChatLogs = false
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 14) {
+            HStack(spacing: 10) {
+                Image(systemName: "trash.circle.fill")
+                    .font(.system(size: 28))
+                    .foregroundColor(.red)
+                    .accessibilityHidden(true)
+                VStack(alignment: .leading, spacing: 2) {
+                    Text(t("Delete the account \(account.username)?"))
+                        .font(.system(size: 12, weight: .bold))
+                    Text(t("The account, its password, and its contacts will be removed. This action cannot be undone."))
+                        .font(.system(size: 10))
+                        .foregroundColor(.secondary)
+                }
+            }
+
+            Toggle(t("Also delete the chat history of this account"), isOn: $deleteChatLogs)
+                .toggleStyle(.checkbox)
+                .font(.system(size: 11))
+
+            HStack {
+                Spacer()
+                Button(t("Cancel")) {
+                    dismiss()
+                }
+                .keyboardShortcut(.cancelAction)
+
+                Button(t("Delete"), role: .destructive) {
+                    onConfirm(deleteChatLogs)
+                    dismiss()
+                }
+            }
+        }
+        .padding(16)
+        .frame(width: 380)
     }
 }
 
@@ -319,13 +396,13 @@ public struct AddAccountSheet: View {
     var usernameLabel: String {
         switch selectedProtocol {
         case .teams:
-            return "Email de Teams:"
+            return t("Teams email:")
         case .whatsapp:
-            return "Teléfono (ej. +34600000000):"
+            return t("Phone (e.g. +34600000000):")
         case .xmpp:
-            return "JID / Usuario:"
+            return t("JID / Username:")
         default:
-            return "Usuario / Email:"
+            return t("Username / Email:")
         }
     }
     
@@ -340,11 +417,11 @@ public struct AddAccountSheet: View {
     
     public var body: some View {
         VStack(spacing: 14) {
-            Text("Añadir Cuenta de Mensajería")
+            Text(t("Add Messaging Account"))
                 .font(.system(size: 13, weight: .bold))
             
             Form {
-                Picker("Protocolo:", selection: $selectedProtocol) {
+                Picker(t("Protocol:"), selection: $selectedProtocol) {
                     ForEach(AccountProtocol.allCases, id: \.self) { proto in
                         Label(proto.rawValue, systemImage: proto.iconName)
                             .tag(proto)
@@ -360,7 +437,8 @@ public struct AddAccountSheet: View {
                         Image(systemName: "safari")
                             .foregroundColor(.accentColor)
                             .font(.system(size: 12))
-                        Text("Microsoft Teams utiliza autenticación web OAuth2. Al hacer clic en Conectar se abrirá tu navegador para iniciar sesión en Microsoft.")
+                            .accessibilityHidden(true)
+                        Text(t("Microsoft Teams uses OAuth2 web authentication. When you click Connect, your browser opens so you can sign in to Microsoft."))
                             .font(.system(size: 10))
                             .foregroundColor(.secondary)
                     }
@@ -370,23 +448,24 @@ public struct AddAccountSheet: View {
                         Image(systemName: "qrcode")
                             .foregroundColor(.accentColor)
                             .font(.system(size: 12))
-                        Text("WhatsApp utiliza vinculación por código QR o par telefónico. Al hacer clic en Conectar se iniciará el proceso de vinculación.")
+                            .accessibilityHidden(true)
+                        Text(t("WhatsApp uses QR code or phone pairing to link. When you click Connect, the link procedure starts."))
                             .font(.system(size: 10))
                             .foregroundColor(.secondary)
                     }
                     .padding(.vertical, 2)
                 } else {
-                    SecureField("Contraseña:", text: $password)
+                    SecureField(t("Password:"), text: $password)
                         .font(.system(size: 11))
                     
-                    DisclosureGroup("Opciones Avanzadas (Servidor, Puerto...)", isExpanded: $showAdvancedOptions) {
-                        TextField("Servidor (ej. jabber.org):", text: $server)
+                    DisclosureGroup(t("Advanced Options (Server, Port...)"), isExpanded: $showAdvancedOptions) {
+                        TextField(t("Server (e.g. jabber.org):"), text: $server)
                             .font(.system(size: 11))
-                        TextField("Puerto (ej. 5222):", text: $port)
+                        TextField(t("Port (e.g. 5222):"), text: $port)
                             .font(.system(size: 11))
-                        TextField("Resource XMPP (ej. Adium):", text: $resource)
+                        TextField(t("XMPP Resource (e.g. Adium):"), text: $resource)
                             .font(.system(size: 11))
-                        Toggle("Usar Conexión Segura (SSL/TLS)", isOn: $useSSL)
+                        Toggle(t("Use Secure Connection (SSL/TLS)"), isOn: $useSSL)
                             .font(.system(size: 11))
                     }
                     .font(.system(size: 10, weight: .medium))
@@ -394,8 +473,8 @@ public struct AddAccountSheet: View {
             }
             .formStyle(.grouped)
             .onChange(of: selectedProtocol) { _, _ in
-                // Advanced options are protocol-specific (e.g. XMPP server/port/resource);
-                // stale values must not silently carry over to a newly selected protocol.
+                // Advanced options are protocol-specific.
+                // Do not carry stale values over to a newly selected protocol.
                 server = ""
                 port = ""
                 resource = ""
@@ -404,14 +483,14 @@ public struct AddAccountSheet: View {
             }
 
             HStack {
-                Button("Cancelar") {
+                Button(t("Cancel")) {
                     isPresented = false
                 }
                 .keyboardShortcut(.cancelAction)
 
                 Spacer()
 
-                Button("Conectar") {
+                Button(t("Connect")) {
                     let trimmedUser = username.trimmingCharacters(in: .whitespacesAndNewlines)
                     guard !trimmedUser.isEmpty else { return }
                     let pass = (selectedProtocol == .teams || selectedProtocol == .whatsapp) ? "" : password
@@ -453,8 +532,9 @@ public struct AccountOptionsSheet: View {
                 Image(systemName: account.accountProtocol.iconName)
                     .font(.system(size: 16))
                     .foregroundColor(.accentColor)
+                    .accessibilityHidden(true)
                 VStack(alignment: .leading, spacing: 2) {
-                    Text("Opciones Avanzadas por Servicio")
+                    Text(t("Advanced Options per Service"))
                         .font(.system(size: 13, weight: .bold))
                     Text("\(account.username) (\(account.accountProtocol.rawValue))")
                         .font(.system(size: 10))
@@ -464,18 +544,18 @@ public struct AccountOptionsSheet: View {
             }
             
             Form {
-                Section(header: Text("Servidor y Conexión").font(.system(size: 10, weight: .bold))) {
-                    TextField("Servidor (Server host):", text: $server)
+                Section(header: Text(t("Server & Connection")).font(.system(size: 10, weight: .bold))) {
+                    TextField(t("Server host:"), text: $server)
                         .font(.system(size: 11))
-                    TextField("Puerto:", text: $port)
+                    TextField(t("Port:"), text: $port)
                         .font(.system(size: 11))
-                    TextField("Resource / Identificador:", text: $resource)
+                    TextField(t("Resource / Identifier:"), text: $resource)
                         .font(.system(size: 11))
-                    Toggle("Usar Conexión Segura (SSL/TLS)", isOn: $useSSL)
+                    Toggle(t("Use Secure Connection (SSL/TLS)"), isOn: $useSSL)
                         .font(.system(size: 11))
                 }
                 
-                Section(header: Text("Opciones Libpurple Extra (clave=valor por línea)").font(.system(size: 10, weight: .bold))) {
+                Section(header: Text(t("Extra Libpurple Options (key=value per line)")).font(.system(size: 10, weight: .bold))) {
                     TextEditor(text: $customOptionsText)
                         .font(.system(size: 10, design: .monospaced))
                         .frame(height: 60)
@@ -496,14 +576,14 @@ public struct AccountOptionsSheet: View {
             }
             
             HStack {
-                Button("Cancelar") {
+                Button(t("Cancel")) {
                     isPresented = false
                 }
                 .keyboardShortcut(.cancelAction)
                 
                 Spacer()
                 
-                Button("Guardar Cambios") {
+                Button(t("Save Changes")) {
                     let parsedPort = Int(port.trimmingCharacters(in: .whitespacesAndNewlines))
                     var optionsDict: [String: String] = [:]
                     let lines = customOptionsText.components(separatedBy: .newlines)
@@ -540,10 +620,10 @@ public struct EventsPreferencesTab: View {
     public var body: some View {
         ScrollView {
             VStack(alignment: .leading, spacing: 14) {
-                Text("Motor de Eventos de Adium")
+                Text(t("Adium Events Engine"))
                     .font(.system(size: 13, weight: .bold))
                 
-                Text("Configura cómo responde Adium a los eventos del sistema (sonidos, rebote del Dock y badges).")
+                Text(t("Configure how Adium responds to system events (sounds, Dock bounce, and badges)."))
                     .font(.system(size: 11))
                     .foregroundColor(.secondary)
                 
@@ -576,7 +656,7 @@ struct EventRuleConfigRow: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 8) {
             HStack {
-                Text(rule.eventType.rawValue)
+                Text(rule.eventType.displayName)
                     .font(.system(size: 11, weight: .bold))
                 
                 Spacer()
@@ -584,11 +664,11 @@ struct EventRuleConfigRow: View {
                 Button(action: {
                     EventManager.shared.triggerEvent(
                         rule.eventType,
-                        title: "Prueba: \(rule.eventType.rawValue)",
-                        content: "Prueba de sonido y reacción del evento."
+                        title: t("Test: \(rule.eventType.displayName)"),
+                        content: t("Test of the event sound and reaction.")
                     )
                 }) {
-                    Label("Probar Evento", systemImage: "play.fill")
+                    Label(t("Test Event"), systemImage: "play.fill")
                         .font(.system(size: 9))
                 }
                 .buttonStyle(.bordered)
@@ -597,11 +677,11 @@ struct EventRuleConfigRow: View {
             
             Grid(alignment: .leading, horizontalSpacing: 16, verticalSpacing: 6) {
                 GridRow {
-                    Toggle("Reproducir sonido", isOn: $playSound)
+                    Toggle(t("Play sound"), isOn: $playSound)
                         .font(.system(size: 11))
                     
                     if playSound {
-                        Picker("Efecto:", selection: $soundName) {
+                        Picker(t("Effect:"), selection: $soundName) {
                             ForEach(EventManager.availableSounds, id: \.self) { sound in
                                 Text(sound).tag(sound)
                             }
@@ -612,15 +692,15 @@ struct EventRuleConfigRow: View {
                 }
                 
                 GridRow {
-                    Toggle("Rebote de icono en Dock", isOn: $bounceDock)
+                    Toggle(t("Bounce Dock icon"), isOn: $bounceDock)
                         .font(.system(size: 11))
                     
-                    Toggle("Contador Badge en Dock", isOn: $updateBadge)
+                    Toggle(t("Dock badge counter"), isOn: $updateBadge)
                         .font(.system(size: 11))
                 }
                 
                 GridRow {
-                    Toggle("Notificación de macOS", isOn: $showNotification)
+                    Toggle(t("macOS notification"), isOn: $showNotification)
                         .font(.system(size: 11))
                 }
             }

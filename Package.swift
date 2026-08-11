@@ -70,6 +70,7 @@ let linkerSearchFlags = libFlags.flatMap { ["-L", $0] } + ["-lpurple", "-lglib-2
 
 let package = Package(
     name: "AdiumSwift",
+    defaultLocalization: "en",
     platforms: [.macOS(.v14)],
     targets: [
         // Targets are the basic building blocks of a package, defining a module or a test suite.

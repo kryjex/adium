@@ -10,7 +10,7 @@ public final class MacOSContactsService {
     
     public init() {}
     
-    /// Request user authorization to access macOS Contacts address book
+    /// This requests user authorization to access the macOS Contacts address book.
     public func requestAccess() async -> Bool {
         let status = CNContactStore.authorizationStatus(for: .contacts)
         switch status {
@@ -28,13 +28,12 @@ public final class MacOSContactsService {
         }
     }
     
-    /// Search and fetch matching CNContact by email address or full name.
+    /// This searches for a matching CNContact by email address or full name.
     ///
-    /// The email match is inherently exact (CNContact's email predicate matches a specific address).
-    /// The name match, however, is a fuzzy address-book search that can return several people sharing
-    /// a first name (e.g. a buddy named "Alex" could match the first "Alex ..." in the address book).
-    /// To avoid silently linking to the wrong person, the name fallback only returns a result when
-    /// exactly one contact's formatted full name is an exact (case-insensitive) match for `name`.
+    /// The email match is exact.
+    /// The name match is a fuzzy search. This search can return several people with the same first name.
+    /// The name fallback only returns a result when exactly one contact matches the full name exactly.
+    /// This prevents linking to the wrong person.
     public func findMatchingContact(email: String?, name: String?) -> CNContact? {
         guard CNContactStore.authorizationStatus(for: .contacts) == .authorized else {
             return nil
@@ -49,7 +48,7 @@ public final class MacOSContactsService {
             CNContactFormatter.descriptorForRequiredKeys(for: .fullName)
         ]
 
-        // 1. Match by Email Address (exact by construction)
+        // 1. This matches by email address.
         if let email = email?.trimmingCharacters(in: .whitespacesAndNewlines), !email.isEmpty, email.contains("@") {
             let predicate = CNContact.predicateForContacts(matchingEmailAddress: email)
             if let matched = (try? contactStore.unifiedContacts(matching: predicate, keysToFetch: keysToFetch))?.first {
@@ -57,7 +56,7 @@ public final class MacOSContactsService {
             }
         }
 
-        // 2. Match by Name: require an exact, unambiguous full-name match.
+        // 2. This matches by name.
         if let name = name?.trimmingCharacters(in: .whitespacesAndNewlines), !name.isEmpty {
             let predicate = CNContact.predicateForContacts(matchingName: name)
             if let candidates = try? contactStore.unifiedContacts(matching: predicate, keysToFetch: keysToFetch) {
@@ -76,9 +75,9 @@ public final class MacOSContactsService {
         return nil
     }
 
-    /// Links an Adium Contact with native macOS address book, enriching its name and profile avatar.
-    /// Never overwrites a name the user has already customized via a local alias, and never replaces
-    /// an avatar the contact already has.
+    /// This links an Adium Contact with the macOS address book. This adds the name and profile avatar.
+    /// This does not overwrite a local alias.
+    /// This does not replace an existing avatar.
     public func linkContact(_ contact: Contact) -> Contact {
         var updated = contact
 
@@ -101,7 +100,7 @@ public final class MacOSContactsService {
         return updated
     }
     
-    /// Automatically link all Adium contacts in PurpleBridgeService with macOS address book
+    /// This links all Adium contacts with the macOS address book.
     public func autoLinkAllContacts() async {
         let hasAccess = await requestAccess()
         guard hasAccess else { return }

@@ -3,13 +3,24 @@ import AppKit
 import UserNotifications
 
 public enum AdiumEventType: String, Codable, CaseIterable, Identifiable {
-    case messageReceived = "Mensaje Recibido"
-    case messageSent = "Mensaje Enviado"
-    case contactOnline = "Contacto Conectado"
-    case contactOffline = "Contacto Desconectado"
-    
+    case messageReceived = "messageReceived"
+    case messageSent = "messageSent"
+    case contactOnline = "contactOnline"
+    case contactOffline = "contactOffline"
+
     public var id: String { rawValue }
-    
+
+    /// This is the localized text for the events UI.
+    /// The raw value stays stable because it persists in the rules storage.
+    public var displayName: String {
+        switch self {
+        case .messageReceived: return t("Message Received")
+        case .messageSent: return t("Message Sent")
+        case .contactOnline: return t("Contact Online")
+        case .contactOffline: return t("Contact Offline")
+        }
+    }
+
     public var defaultSoundName: String {
         switch self {
         case .messageReceived: return "Tink"
@@ -77,7 +88,7 @@ public final class EventManager {
             }
         }
         
-        // Ensure default rules exist for all event types
+        // This ensures default rules for all event types.
         for eventType in AdiumEventType.allCases {
             if rules[eventType] == nil {
                 let defaultRule: EventRule
@@ -115,24 +126,23 @@ public final class EventManager {
         
         let rule = rules[eventType] ?? EventRule(eventType: eventType)
         
-        // 1. Play Sound
+        // 1. Play sound
         if rule.playSound {
             playSound(named: rule.soundName)
         }
         
-        // 2. Dock Bounce
+        // 2. Bounce dock
         if rule.bounceDock {
             bounceDockIcon()
         }
         
-        // 3. Update Badge — intentionally not handled here. The caller (PurpleBridge's
-        // onMessageReceived/onChatMessage) already recomputes and sets the exact unread
-        // total via EventManager.setUnreadCount before calling triggerEvent; incrementing
-        // again here double-counted the badge (and kept climbing even for the active tab,
-        // since triggerEvent still fires for it). setUnreadCount is the single source of
-        // truth for the badge count.
+        // 3. Update badge. The code does not handle this here.
+        // The caller calculates the unread total.
+        // The caller sets the total with EventManager.setUnreadCount.
+        // This prevents a double count on the badge.
+        // EventManager.setUnreadCount is the single source of truth for the count.
 
-        // 4. macOS Notification
+        // 4. Show macOS notification
         if rule.showNotification {
             NotificationService.shared.notifyIncomingMessage(sender: title, content: content, playSound: rule.playSound)
         }

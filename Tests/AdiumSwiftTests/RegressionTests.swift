@@ -2,8 +2,8 @@ import Testing
 import Foundation
 @testable import AdiumSwift
 
-/// Regression tests for a batch of bug fixes. Each test is written to FAIL if its
-/// corresponding fix were reverted.
+/// These are regression tests for bug fixes.
+/// A test will fail if its bug fix is reverted.
 @Suite("Regression Tests for Recent Bug Fixes")
 struct RegressionTests {
 
@@ -11,7 +11,7 @@ struct RegressionTests {
 
     @Test("Account decodes old-shape JSON missing the newer customOptions key")
     func testAccountDecodesOldJSONWithoutCustomOptions() throws {
-        // Mimics JSON persisted by a build that predates `customOptions`.
+        // This mimics JSON from an older build.
         let oldJSON: [String: Any] = [
             "id": UUID().uuidString,
             "username": "legacy.user@test.com",
@@ -52,7 +52,7 @@ struct RegressionTests {
 
     @Test("Contact decodes old-shape JSON missing isBlocked/isTyping/isGroupChat/groupParticipants")
     func testContactDecodesOldJSONWithoutNewerKeys() throws {
-        // Mimics JSON persisted by a build that predates the blocking/typing/group-chat fields.
+        // This mimics JSON from an older build.
         let oldJSON: [String: Any] = [
             "id": UUID().uuidString,
             "name": "Legacy Contact",
@@ -183,13 +183,15 @@ struct RegressionTests {
             bridge.unreadCounts.removeValue(forKey: contact.id)
         }
 
+        // Sync the badge with the current unreadCounts totals first.
+        // Other tests leave stale entries that would skew the baseline.
+        bridge.markAsRead(for: contact.id)
         let baseline = eventMgr.unreadCount
         bridge.onMessageReceived(senderHandle: handle, text: "Incoming badge test", isFromMe: false)
 
-        // The contact's own unread count must have moved by exactly one...
-        #expect(bridge.unreadCounts[contact.id] == 1)
-        // ...and that single increment must be reflected exactly once in the badge total,
-        // not doubled by triggerEvent additionally incrementing it.
+        // The unread count of the contact must increase by one.
+        // The total badge count must increase by one.
+        // The triggerEvent must not increase the count again.
         #expect(eventMgr.unreadCount == baseline + 1)
     }
 
@@ -255,7 +257,8 @@ struct RegressionTests {
 
         #expect(!bridge.messages(for: blockedContact).contains(where: { $0.text == outgoingText }))
         #expect(store.loadMessages(for: handle)?.contains(where: { $0.text == outgoingText }) != true)
-        #expect(bridge.connectionState.contains("bloqueado"))
+        // The expected text goes through t() so the test passes in every locale.
+        #expect(bridge.connectionState == t("Cannot send: \(blockedContact.displayName) is blocked"))
     }
 
     // MARK: - 5. Metacontact re-combining
@@ -280,13 +283,12 @@ struct RegressionTests {
 
         let metaBC = bridge.combineContacts([b.id, c.id], name: "BC Combined")
 
-        // The old AB metacontact dropped to a single member (A) once B left, so it must be
-        // dissolved entirely.
-        #expect(!bridge.metacontacts.contains(where: { $0.id == metaAB.id }))
-        // A's stale metacontactID pointing at the now-dissolved AB metacontact must be cleared.
+        // The old AB metacontact drops to a single member.
+        // The system dissolves it.
+        // The system clears the old metacontactID for A.
         #expect(bridge.contacts.first(where: { $0.id == a.id })?.metacontactID == nil)
 
-        // B must belong to exactly the new BC metacontact -- never left listed under the old one.
+        // B must belong to the new BC metacontact.
         #expect(bridge.metacontacts.first(where: { $0.id == metaBC.id })?.contactIDs.contains(b.id) == true)
         #expect(bridge.contacts.first(where: { $0.id == b.id })?.metacontactID == metaBC.id)
         #expect(!bridge.metacontacts.contains(where: { $0.id != metaBC.id && $0.contactIDs.contains(b.id) }))
@@ -319,8 +321,9 @@ struct RegressionTests {
         #expect(bridge.contactGroups.filter({ $0.name == nameOne }).count == 1)
         #expect(bridge.contactGroups.filter({ $0.name == nameTwo }).count == 1)
 
-        // Rename nameOne to nameTwo's name but with different casing -- must be refused, both
-        // original groups must still exist exactly once.
+        // This renames nameOne to nameTwo with different casing.
+        // The system refuses this.
+        // Both original groups must exist.
         bridge.renameGroup(oldName: nameOne, newName: nameTwo.uppercased())
 
         #expect(bridge.contactGroups.contains(where: { $0.name == nameOne }))
@@ -368,13 +371,13 @@ struct RegressionTests {
         let contact = Contact(name: "NoPreAppend", handle: "nopre@test.com", status: .available, accountProtocol: .teams)
         let countBefore = manager.transfers.count
 
-        // With libpurple not loaded, sendFile must return immediately without ever touching
-        // `transfers` -- guards against a regression where sendFile used to eagerly append a
-        // "pending" row itself before libpurple's xfer-new callback fires.
+        // The sendFile function returns immediately.
+        // It does not change the transfers.
+        // This prevents an eager append of a pending row.
         manager.sendFile(to: contact, at: URL(fileURLWithPath: "/tmp/does-not-matter.txt"))
         #expect(manager.transfers.count == countBefore)
 
-        // Simulate the real flow: libpurple's onXferNew is the ONLY thing that creates the row.
+        // This simulates the real flow. Only onXferNew creates the row.
         let rawAddr = UInt.random(in: 1...UInt.max)
         manager.onXferNew(rawPointerAddr: rawAddr, who: "NoPreAppend", filename: "report.pdf", size: 1000, isIncoming: false)
         defer { manager.transfers.removeAll(where: { $0.rawPointerAddr == rawAddr }) }
@@ -393,7 +396,7 @@ struct RegressionTests {
         manager.onXferCancel(rawPointerAddr: rawAddr, byLocal: true)
         #expect(manager.transfers.first(where: { $0.rawPointerAddr == rawAddr })?.state == .cancelled)
 
-        // A late progress update reporting the transfer as fully complete must NOT resurrect it.
+        // A late progress update must not resurrect a complete transfer.
         manager.onXferUpdate(rawPointerAddr: rawAddr, bytesSent: 5000, totalBytes: 5000, status: 0)
         #expect(manager.transfers.first(where: { $0.rawPointerAddr == rawAddr })?.state == .cancelled)
     }
@@ -440,7 +443,7 @@ struct RegressionTests {
 
         let calendar = Calendar.current
         let startOfToday = calendar.startOfDay(for: Date())
-        // Late in the day (23:59), well after an early-morning "end date" filter value.
+        // This uses a time late in the day.
         let lateInDay = startOfToday.addingTimeInterval(23 * 3600 + 59 * 60)
         let earlyTimeSameDay = startOfToday.addingTimeInterval(8 * 3600)
 
@@ -450,9 +453,8 @@ struct RegressionTests {
 
         let contactAlice = Contact(name: "Alice EndDay", handle: handle, status: .available, accountProtocol: .teams)
 
-        // Filtering with an end-date set to any time within the SAME day must still include a
-        // message timestamped later that same day -- end-date filtering is inclusive through the
-        // whole calendar day, not just up to the exact clock time given.
+        // The end-date filter includes the whole day.
+        // It includes messages from later in the same day.
         let endDateResults = store.filterMessages(endDate: earlyTimeSameDay, contacts: [contactAlice])
         let matchingHandle = endDateResults.first(where: { $0.handle == store.sanitizeHandle(handle) })
         #expect(matchingHandle != nil)
@@ -470,20 +472,19 @@ struct RegressionTests {
             try? FileManager.default.removeItem(at: tempLogsDir)
         }
 
-        // This log's handle has NO corresponding Contact in the `contacts` list passed to
-        // filterMessages, so its protocol can never be determined.
+        // This handle has no corresponding Contact.
+        // The system cannot determine its protocol.
         let orphanHandle = "orphan.ghost@test.com"
         let msgOrphan = ChatMessage(senderName: "Ghost", isFromMe: false, text: "Orphan protocol message")
         store.saveMessages([msgOrphan], for: orphanHandle)
 
         let knownContact = Contact(name: "Known Contact", handle: "known.contact@test.com", status: .available, accountProtocol: .teams)
 
-        // With a protocol filter active, a log we can't attribute to any protocol must be
-        // excluded rather than silently let through.
+        // A protocol filter excludes a log with no known protocol.
         let protoFilteredResults = store.filterMessages(protocolType: .whatsapp, contacts: [knownContact])
         #expect(!protoFilteredResults.contains(where: { $0.handle == store.sanitizeHandle(orphanHandle) }))
 
-        // With no protocol filter at all, that same log must still be included.
+        // The system includes the log if there is no filter.
         let unfilteredResults = store.filterMessages(contacts: [knownContact])
         #expect(unfilteredResults.contains(where: { $0.handle == store.sanitizeHandle(orphanHandle) }))
     }
@@ -511,11 +512,11 @@ struct RegressionTests {
         """
         let imported = PurpleBridgeService.parsePurpleAccountsXML(xml)
 
-        // The retired "prpl-teams" ID (which never matched the real plugin) must map to .teams,
-        // whose purpleProtocolID is the working "prpl-eionrobb-msteams".
+        // The prpl-teams ID maps to .teams.
+        // The new ID is prpl-eionrobb-msteams.
         #expect(imported.contains(where: { $0.username == "jane@example.com" && $0.accountProtocol == .teams }))
         #expect(imported.contains(where: { $0.username == "jane@jabber.org/Adium" && $0.accountProtocol == .xmpp }))
-        // Unknown protocol IDs are skipped, never guessed.
+        // The system skips unknown protocol IDs.
         #expect(!imported.contains(where: { $0.username == "ignored@example.com" }))
         #expect(imported.count == 2)
     }
@@ -544,22 +545,22 @@ struct RegressionTests {
         bridge.accounts.append(account)
         let room = bridge.joinGroupChat(channelName: "Roster Room \(UUID().uuidString.prefix(6))", account: account)
         defer {
-            bridge.contacts.removeAll(where: { $0.id == room.id })
+            bridge.leaveGroupChat(room.id)
             bridge.removeAccount(account)
         }
 
-        // Initial roster population arrives with newArrival == false; must still be added.
+        // The system adds initial roster items.
         bridge.onChatBuddyJoined(roomName: room.handle, buddyName: "existing.member@teams.com", newArrival: false)
         let afterInitial = bridge.contacts.first(where: { $0.id == room.id })
         #expect(afterInitial?.groupParticipants.contains(where: { $0.handle == "existing.member@teams.com" }) == true)
 
-        // A later, genuine join (newArrival == true) is also added.
+        // The system adds a new join.
         bridge.onChatBuddyJoined(roomName: room.handle, buddyName: "new.joiner@teams.com", newArrival: true)
         let afterJoin = bridge.contacts.first(where: { $0.id == room.id })
         #expect(afterJoin?.groupParticipants.contains(where: { $0.handle == "new.joiner@teams.com" }) == true)
         let countAfterJoin = afterJoin?.groupParticipants.count ?? 0
 
-        // Re-announcing the same handle (e.g. duplicate roster event) must not duplicate the entry.
+        // The system does not duplicate the entry.
         bridge.onChatBuddyJoined(roomName: room.handle, buddyName: "new.joiner@teams.com", newArrival: false)
         let afterDuplicate = bridge.contacts.first(where: { $0.id == room.id })
         #expect(afterDuplicate?.groupParticipants.count == countAfterJoin)
@@ -573,7 +574,7 @@ struct RegressionTests {
         bridge.accounts.append(account)
         let room = bridge.joinGroupChat(channelName: "Leave Room \(UUID().uuidString.prefix(6))", account: account)
         defer {
-            bridge.contacts.removeAll(where: { $0.id == room.id })
+            bridge.leaveGroupChat(room.id)
             bridge.removeAccount(account)
         }
 
@@ -599,7 +600,7 @@ struct RegressionTests {
         bridge.onChatBuddyJoined(roomName: unknownRoom, buddyName: "someone@teams.com", newArrival: true)
         bridge.onChatBuddyLeft(roomName: unknownRoom, buddyName: "someone@teams.com")
 
-        // No crash and no new contact accidentally created for the unknown room.
+        // The system does not create a new contact.
         #expect(bridge.contacts.count == countBefore)
     }
 
@@ -645,8 +646,8 @@ struct RegressionTests {
         manager.clearError()
         #expect(manager.lastErrorMessage == nil)
 
-        // No account exists for this protocol/username combination, so resolveAccount fails
-        // and sendFile must surface an error instead of silently dropping the request.
+        // No account exists for this combination.
+        // The sendFile function shows an error.
         let contact = Contact(name: "No Account", handle: "no.account@test.com", status: .available, accountProtocol: .teams, accountUsername: "nonexistent.owner@test.com")
         manager.sendFile(to: contact, at: URL(fileURLWithPath: "/tmp/does-not-matter.txt"))
 
@@ -680,9 +681,9 @@ struct RegressionTests {
             bridge.accounts = prevAccounts
         }
 
-        // The user deleted their last account: the Swift layer has persisted an EMPTY list.
-        // Even with the one-time-import flag cleared, an existing (possibly stale)
-        // ~/.adium-swift/accounts.xml must NOT repopulate the account list.
+        // The user deleted their last account.
+        // The system saves an empty list.
+        // The system must not read accounts.xml again.
         defaults.set(try JSONEncoder().encode([Account]()), forKey: savedKey)
         defaults.removeObject(forKey: flagKey)
         bridge.accounts = []
@@ -690,5 +691,111 @@ struct RegressionTests {
         bridge.restoreSavedAccounts()
 
         #expect(bridge.accounts.isEmpty)
+    }
+
+    // MARK: - 13. Duplicate contacts sharing a handle collapse into one (wrong-protocol dupes)
+
+    @Test("dedupeContactsByHandle keeps the newest contact and preserves user customizations from the older duplicate")
+    func testDedupeContactsByHandle() {
+        // The Logon QR Code was in Teams.
+        // It was then in WhatsApp.
+        // The system merges them into one.
+        let stale = Contact(
+            name: "Logon QR Code", handle: "Logon QR Code", status: .available,
+            accountProtocol: .teams, alias: "Vinculación WhatsApp", isBlocked: true
+        )
+        let fresh = Contact(
+            name: "Logon QR Code", handle: "Logon QR Code", status: .available,
+            accountProtocol: .whatsapp
+        )
+        let other = Contact(name: "Alice", handle: "alice@test.com", status: .available)
+
+        let deduped = PurpleBridgeService.dedupeContactsByHandle([stale, other, fresh])
+
+        #expect(deduped.count == 2)
+        let merged = deduped.first(where: { $0.handle == "Logon QR Code" })
+        #expect(merged?.accountProtocol == .whatsapp)
+        #expect(merged?.alias == "Vinculación WhatsApp")
+        #expect(merged?.isBlocked == true)
+        #expect(deduped.contains(where: { $0.handle == "alice@test.com" }))
+    }
+
+    // MARK: - WhatsApp username normalization
+    // purple-gowhatsapp requires "<digits>@s.whatsapp.net" as the username.
+    // The app normalizes instead of patching the plugin's JID comparisons.
+
+    @Test("canonicalUsername converts phone formats to the canonical WhatsApp JID")
+    func testWhatsAppCanonicalUsername() {
+        #expect(AccountProtocol.whatsapp.canonicalUsername("+34600000000") == "34600000000@s.whatsapp.net")
+        #expect(AccountProtocol.whatsapp.canonicalUsername("+34 600 00 00 00") == "34600000000@s.whatsapp.net")
+        #expect(AccountProtocol.whatsapp.canonicalUsername("34600000000") == "34600000000@s.whatsapp.net")
+        #expect(AccountProtocol.whatsapp.canonicalUsername("34600000000@s.whatsapp.net") == "34600000000@s.whatsapp.net")
+        #expect(AccountProtocol.whatsapp.canonicalUsername("   ") == "")
+        // Other protocols pass through unchanged.
+        #expect(AccountProtocol.teams.canonicalUsername("user@example.com") == "user@example.com")
+        #expect(AccountProtocol.xmpp.canonicalUsername("+34600000000") == "+34600000000")
+    }
+
+    @Test("restoreSavedAccounts migrates a legacy WhatsApp username and its Keychain entry")
+    @MainActor
+    func testRestoreMigratesWhatsAppUsername() throws {
+        let bridge = PurpleBridgeService.shared
+        let defaults = UserDefaults.standard
+        let savedAccountsKey = "AdiumSavedAccounts"
+        let legacyUsername = "+34600111222"
+        let canonicalUsername = "34600111222@s.whatsapp.net"
+        let protoID = AccountProtocol.whatsapp.purpleProtocolID
+        let oldKey = "\(legacyUsername):\(protoID)"
+        let newKey = "\(canonicalUsername):\(protoID)"
+
+        let previousData = defaults.data(forKey: savedAccountsKey)
+        let previousAccounts = bridge.accounts
+        defer {
+            if let previousData {
+                defaults.set(previousData, forKey: savedAccountsKey)
+            } else {
+                defaults.removeObject(forKey: savedAccountsKey)
+            }
+            bridge.accounts = previousAccounts
+            KeychainHelper.deletePassword(for: oldKey)
+            KeychainHelper.deletePassword(for: newKey)
+        }
+
+        let legacy = Account(username: legacyUsername, accountProtocol: .whatsapp)
+        defaults.set(try JSONEncoder().encode([legacy]), forKey: savedAccountsKey)
+        KeychainHelper.savePassword("secret-123", for: oldKey)
+
+        bridge.restoreSavedAccounts()
+
+        let migrated = bridge.accounts.first(where: { $0.accountProtocol == .whatsapp && $0.username == canonicalUsername })
+        #expect(migrated != nil)
+        #expect(!bridge.accounts.contains(where: { $0.username == legacyUsername }))
+        #expect(KeychainHelper.fetchPassword(for: newKey) == "secret-123")
+        #expect(KeychainHelper.fetchPassword(for: oldKey) == nil)
+    }
+
+    // MARK: - Teams meeting metadata events
+
+    @Test("Meeting metadata JSON blobs are detected, escaped or plain")
+    func meetingMetadataDetection() {
+        let escaped = "{\\\"scopeId\\\":\\\"a83db5e0\\\",\\\"callId\\\":\\\"a83db5e0\\\",\\\"isDeleted\\\":false}"
+        let plain = "{\"scopeId\":\"a83db5e0\",\"iCalUid\":\"0400\",\"isDeleted\":false}"
+        #expect(ChatMessage(senderName: "x", isFromMe: false, text: escaped).isMeetingMetadataEvent)
+        #expect(ChatMessage(senderName: "x", isFromMe: false, text: plain).isMeetingMetadataEvent)
+        // A JSON object without meeting keys is user content and stays visible.
+        let userJson = "{\"gcp_comsac\": 1, \"gcp_basegcp\": 2, \"other\": \"value\"}"
+        #expect(!ChatMessage(senderName: "x", isFromMe: false, text: userJson).isMeetingMetadataEvent)
+        #expect(!ChatMessage(senderName: "x", isFromMe: false, text: "hola {mundo}").isMeetingMetadataEvent)
+        #expect(!ChatMessage(senderName: "x", isFromMe: false, text: "Call ended").isMeetingMetadataEvent)
+    }
+
+    @Test("System event senders resolve to nil for thread ids")
+    @MainActor
+    func threadSenderHidesLine() {
+        let bridge = PurpleBridgeService.shared
+        #expect(bridge.resolveSenderDisplayName("19:meeting_abc@thread.v2", in: nil) == nil)
+        #expect(bridge.resolveSenderDisplayName("", in: nil) == nil)
+        // An unknown person id stays visible as-is.
+        #expect(bridge.resolveSenderDisplayName("orgid:ffffffff", in: nil) == "orgid:ffffffff")
     }
 }

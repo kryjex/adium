@@ -23,7 +23,7 @@ struct AdiumSwiftApp: App {
     }
     
     var body: some Scene {
-        WindowGroup("Adium (Lista de Contactos)") {
+        WindowGroup(t("Adium (Contact List)")) {
             NavigationSplitView {
                 ContactListView(selectedContactID: $selectedContactID)
                     .navigationTitle("Adium")
@@ -48,49 +48,44 @@ struct AdiumSwiftApp: App {
         }
         .commands {
             CommandGroup(replacing: .newItem) {
-                Button("Nueva Conversación") {
+                Button(t("New Conversation")) {
                     NotificationCenter.default.post(name: .openNewConversation, object: nil)
                 }
                 .keyboardShortcut("n", modifiers: [.command])
             }
-            
+
             CommandGroup(after: .newItem) {
-                Button("Añadir Cuenta...") {
+                Button(t("Add Account...")) {
                     NotificationCenter.default.post(name: .openAddAccount, object: nil)
                 }
                 .keyboardShortcut("A", modifiers: [.command, .shift])
             }
-            
+
             CommandGroup(replacing: .textEditing) {
-                Button("Buscar Contactos") {
+                Button(t("Search Contacts")) {
                     NotificationCenter.default.post(name: .focusContactSearch, object: nil)
                 }
                 .keyboardShortcut("f", modifiers: [.command])
             }
-            
-            CommandMenu("Transcripciones") {
-                Button("Visor de Transcripciones (⌘⌥T)") {
+
+            CommandMenu(t("Transcripts")) {
+                Button(t("Transcript Viewer")) {
                     TranscriptViewerWindowController.shared.show()
                 }
                 .keyboardShortcut("t", modifiers: [.command, .option])
-                
-                Button("Visor de Transcripciones (⌘⇧T)") {
-                    TranscriptViewerWindowController.shared.show()
-                }
-                .keyboardShortcut("T", modifiers: [.command, .shift])
             }
-            
+
             CommandGroup(after: .windowList) {
-                Button("Transferencias de Archivos") {
+                Button(t("File Transfers")) {
                     FileTransferWindowController.shared.show()
                 }
                 .keyboardShortcut("l", modifiers: [.command, .option])
             }
 
             CommandGroup(after: .windowList) {
-                // Only claims ⌘W while a tab is open; otherwise it's disabled so the
-                // system's standard "Close Window" item (also ⌘W) handles the window.
-                Button("Cerrar Pestaña") {
+                // This claims ⌘W only while a tab is open. Otherwise, it is disabled.
+                // The standard "Close Window" command then handles the window.
+                Button(t("Close Tab")) {
                     if let activeID = bridge.activeTabID {
                         bridge.closeTab(activeID)
                     }
@@ -137,7 +132,7 @@ public struct TabbedChatContainerView: View {
                     Spacer()
                     
                     Button(action: { showJoinGroupSheet = true }) {
-                        Label("Unirse a Grupo", systemImage: "person.3.badge.plus")
+                        Label(t("Join Group"), systemImage: "person.3.badge.plus")
                             .font(.system(size: 10, weight: .medium))
                             .padding(.horizontal, 6)
                             .padding(.vertical, 3)
@@ -145,7 +140,7 @@ public struct TabbedChatContainerView: View {
                     .buttonStyle(.bordered)
                     .controlSize(.small)
                     .padding(.trailing, 6)
-                    .help("Unirse a un chat de grupo o canal (MUC)")
+                    .help(t("Join a group chat or channel (MUC)"))
                 }
                 .background(Material.bar)
                 
@@ -166,14 +161,14 @@ public struct TabbedChatContainerView: View {
                     Text("AdiumSwift")
                         .font(.system(size: 16, weight: .bold))
                     
-                    Text("Selecciona un contacto de la lista o abre un chat de grupo para iniciar una conversación en pestañas.")
+                    Text(t("Select a contact from the list or open a group chat to start a tabbed conversation."))
                         .font(.system(size: 11))
                         .foregroundColor(.secondary)
                         .multilineTextAlignment(.center)
                         .padding(.horizontal, 40)
                     
                     Button(action: { showJoinGroupSheet = true }) {
-                        Label("Unirse a Chat Grupal / MUC", systemImage: "person.3.fill")
+                        Label(t("Join Group Chat / MUC"), systemImage: "person.3.fill")
                             .font(.system(size: 11, weight: .medium))
                     }
                     .buttonStyle(.borderedProminent)
@@ -205,10 +200,12 @@ struct ChatTabItemView: View {
                 Image(systemName: "person.3.fill")
                     .font(.system(size: 9))
                     .foregroundColor(isActive ? .accentColor : .secondary)
+                    .accessibilityHidden(true)
             } else {
                 Circle()
                     .fill(statusColor(contact.status))
                     .frame(width: 6, height: 6)
+                    .accessibilityHidden(true)
             }
             
             Text(contact.displayName)
@@ -233,7 +230,8 @@ struct ChatTabItemView: View {
                     .background(Circle().fill(Color.secondary.opacity(isHovered ? 0.3 : 0.0)))
             }
             .buttonStyle(.plain)
-            .help("Cerrar pestaña (⌘W)")
+            .help(t("Close tab (⌘W)"))
+            .accessibilityLabel(t("Close tab for \(contact.displayName)"))
         }
         .padding(.horizontal, 8)
         .padding(.vertical, 4)
@@ -285,14 +283,15 @@ struct JoinGroupChatSheet: View {
                 Image(systemName: "person.3.fill")
                     .font(.system(size: 16))
                     .foregroundColor(.accentColor)
-                Text("Unirse a Chat Grupal / Canal (MUC)")
+                    .accessibilityHidden(true)
+                Text(t("Join Group Chat / Channel (MUC)"))
                     .font(.system(size: 13, weight: .bold))
                 Spacer()
             }
-            
+
             Form {
                 if bridge.accounts.count > 1 {
-                    Picker("Cuenta:", selection: $selectedAccountID) {
+                    Picker(t("Account:"), selection: $selectedAccountID) {
                         ForEach(bridge.accounts) { acc in
                             Text("\(acc.username) (\(acc.accountProtocol.rawValue))")
                                 .tag(Optional(acc.id))
@@ -301,21 +300,21 @@ struct JoinGroupChatSheet: View {
                     .font(.system(size: 11))
                 }
                 
-                TextField("Nombre del Canal / Grupo:", text: $channelName)
+                TextField(t("Channel / Group Name:"), text: $channelName)
                     .font(.system(size: 11))
-                
-                TextField("Tema / Descripción (opcional):", text: $topic)
+
+                TextField(t("Topic / Description (optional):"), text: $topic)
                     .font(.system(size: 11))
             }
             .formStyle(.grouped)
-            
+
             HStack {
-                Button("Cancelar") { isPresented = false }
+                Button(t("Cancel")) { isPresented = false }
                     .keyboardShortcut(.cancelAction)
-                
+
                 Spacer()
-                
-                Button("Unirse al Grupo") {
+
+                Button(t("Join the Group")) {
                     let trimmed = channelName.trimmingCharacters(in: .whitespacesAndNewlines)
                     guard !trimmed.isEmpty, let acc = selectedAccount else { return }
                     bridge.joinGroupChat(channelName: trimmed, account: acc, topic: topic.isEmpty ? nil : topic)

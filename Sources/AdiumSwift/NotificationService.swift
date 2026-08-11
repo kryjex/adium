@@ -24,10 +24,9 @@ public final class NotificationService: NSObject, UNUserNotificationCenterDelega
         }
     }
     
-    /// Display a native macOS notification for incoming chat messages. `playSound`
-    /// mirrors the triggering EventRule so a sound-off rule stays silent — otherwise this
-    /// notification's own sound stacks on top of whatever EventManager.playSound already
-    /// played for the same event.
+    /// Display a native macOS notification for incoming chat messages.
+    /// The playSound parameter mirrors the triggering EventRule.
+    /// This prevents a double sound effect.
     public func notifyIncomingMessage(sender: String, content: String, playSound: Bool = true) {
         self.lastNotification = (sender: sender, content: content)
 
@@ -41,7 +40,7 @@ public final class NotificationService: NSObject, UNUserNotificationCenterDelega
         let request = UNNotificationRequest(
             identifier: UUID().uuidString,
             content: notificationContent,
-            trigger: nil // Deliver immediately
+            trigger: nil // Deliver the notification immediately.
         )
 
         UNUserNotificationCenter.current().add(request)
@@ -52,7 +51,7 @@ public final class NotificationService: NSObject, UNUserNotificationCenterDelega
     }
 
     
-    /// Play sound effect for sending a message
+    /// Play a sound effect when you send a message.
     public func playSendSound() {
         EventManager.shared.playSound(named: EventManager.shared.rules[.messageSent]?.soundName ?? "Pop")
     }

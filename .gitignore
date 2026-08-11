@@ -16,6 +16,7 @@ Dependencies/Frameworks
 Dependencies/build.log
 Dependencies/error.log
 Dependencies/framework_maker/*.pyc
+.claude/settings.local.json
 
 Resources/af/LC_MESSAGES
 Resources/af/LC_MESSAGES

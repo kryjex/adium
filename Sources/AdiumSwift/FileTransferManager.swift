@@ -3,24 +3,24 @@ import CLibpurple
 import AppKit
 
 public enum FileTransferDirection: String, Codable, CaseIterable, Sendable {
-    case incoming = "Entrante"
-    case outgoing = "Saliente"
+    case incoming = "incoming"
+    case outgoing = "outgoing"
 }
 
 public enum FileTransferState: String, Codable, CaseIterable, Sendable {
-    case pending = "Pendiente de Aceptación"
-    case transferring = "Transfiriendo..."
-    case paused = "Pausado"
-    case completed = "Completado"
-    case cancelled = "Cancelado"
-    case failed = "Error"
+    case pending = "pending"
+    case transferring = "transferring"
+    case paused = "paused"
+    case completed = "completed"
+    case cancelled = "cancelled"
+    case failed = "failed"
 }
 
 public struct FileTransferItem: Identifiable, Hashable, Sendable {
     public let id: UUID
-    // var, not let: cleared once libpurple destroys the underlying PurpleXfer (see
-    // FileTransferManager.onXferDestroyed) so accept/cancel buttons stop targeting a
-    // freed pointer.
+    // This uses var instead of let.
+    // The destroy callback clears this field when libpurple frees the PurpleXfer.
+    // This stops accept/cancel buttons from targeting a freed pointer.
     public var rawPointerAddr: UInt?
     public var contactName: String
     public var filename: String
@@ -86,19 +86,18 @@ public final class FileTransferManager {
     
     public var transfers: [FileTransferItem] = []
 
-    /// Set when an operation is refused locally (e.g. sendFile couldn't resolve an
-    /// account); surfaced for the UI to display instead of silently dropping the request.
+    /// A local operation failure sets this message.
+    /// The UI displays this instead of dropping the request.
     public private(set) var lastErrorMessage: String?
 
     public init() {}
 
-    /// Dismiss the currently surfaced error, e.g. after the user acknowledges the banner in
-    /// FileTransferView.
+    /// This dismisses the current error.
     public func clearError() {
         lastErrorMessage = nil
     }
 
-    /// Register callbacks from PurpleBridge to listen to libpurple file transfers
+    /// This registers callbacks from PurpleBridge to listen to file transfers.
     public func registerPurpleCallbacks() {
         adium_purple_set_xfer_callbacks(
             FileTransferManager.handleXferNewCallback,
@@ -108,7 +107,7 @@ public final class FileTransferManager {
         )
     }
 
-    /// Accept an incoming file transfer and specify local download path
+    /// This accepts an incoming file transfer and sets the download path.
     public func acceptTransfer(_ item: FileTransferItem, saveToPath: String) {
         guard let idx = transfers.firstIndex(where: { $0.id == item.id }) else { return }
         transfers[idx].localPath = saveToPath
@@ -119,7 +118,7 @@ public final class FileTransferManager {
         }
     }
 
-    /// Cancel an active or pending file transfer
+    /// This cancels an active or pending file transfer.
     public func cancelTransfer(_ item: FileTransferItem) {
         guard let idx = transfers.firstIndex(where: { $0.id == item.id }) else { return }
         transfers[idx].state = .cancelled
@@ -129,9 +128,10 @@ public final class FileTransferManager {
         }
     }
 
-    // pause unsupported by libpurple 2.x xfer API: there is no generic "pause" call for a
-    // PurpleXfer, only cancel. These are intentionally no-ops (state is left unchanged)
-    // rather than lying to the UI that bytes stopped flowing.
+    // Libpurple 2.x xfer API does not support pause.
+    // A PurpleXfer only supports cancel.
+    // These are no-ops that leave the state unchanged.
+    // This prevents bad data in the UI.
     public func pauseTransfer(_ item: FileTransferItem) {
         #if DEBUG
         print("[FileTransferManager] pauseTransfer requested for \(item.filename), but pausing isn't supported by libpurple 2.x — ignoring")
@@ -144,21 +144,22 @@ public final class FileTransferManager {
         #endif
     }
 
-    /// Initiate outgoing file transfer to a contact. Does not pre-append a row: libpurple's
-    /// xfer-new callback (onXferNew) creates the single row for this transfer once the
-    /// prpl actually starts it, avoiding a duplicate stuck-at-0% row for the same transfer.
+    /// This starts an outgoing file transfer to a contact.
+    /// It does not add a row.
+    /// The onXferNew callback creates the row when the transfer starts.
+    /// This prevents a duplicate row stuck at 0%.
     public func sendFile(to contact: Contact, at fileURL: URL) {
         guard PurpleBridgeService.shared.isLibpurpleLoaded else { return }
 
         guard let account = PurpleBridgeService.shared.resolveAccount(for: contact) else {
-            lastErrorMessage = "No se pudo enviar el archivo: no se encontro una cuenta para \(contact.displayName)"
+            lastErrorMessage = t("Could not send the file: no account found for \(contact.displayName)")
             return
         }
 
         _ = adium_purple_send_file(account.username, contact.accountProtocol.purpleProtocolID, contact.handle, fileURL.path)
     }
 
-    /// Handlers called from C callbacks
+    /// These are handlers called from C callbacks.
     public func onXferNew(rawPointerAddr: UInt, who: String, filename: String, size: Int64, isIncoming: Bool) {
         let item = FileTransferItem(
             rawPointerAddr: rawPointerAddr,
@@ -175,8 +176,8 @@ public final class FileTransferManager {
 
     public func onXferUpdate(rawPointerAddr: UInt, bytesSent: Int64, totalBytes: Int64, status: Int32) {
         guard let idx = transfers.firstIndex(where: { $0.rawPointerAddr == rawPointerAddr }) else { return }
-        // Once a transfer has been cancelled or errored out, don't let a stale/late
-        // progress update flip it back to transferring/completed.
+        // Do not let a late progress update change a cancelled transfer.
+        // This prevents the state from flipping back to transferring.
         guard transfers[idx].state != .cancelled && transfers[idx].state != .failed else { return }
 
         let now = Date()
@@ -201,10 +202,10 @@ public final class FileTransferManager {
         transfers[idx].state = .cancelled
     }
 
-    /// libpurple is about to free the PurpleXfer this row points to. If the transfer never
-    /// reached a terminal state, mark it failed/cancelled so the UI doesn't keep showing a
-    /// row stuck mid-progress; either way, clear rawPointerAddr so accept/cancel buttons
-    /// stop targeting a pointer that's no longer valid.
+    /// Libpurple is about to free the PurpleXfer for this row.
+    /// This marks the row failed if the transfer is not complete.
+    /// This prevents the UI from showing a stuck row.
+    /// This clears rawPointerAddr so buttons stop targeting a bad pointer.
     public func onXferDestroyed(rawPointerAddr: UInt) {
         guard let idx = transfers.firstIndex(where: { $0.rawPointerAddr == rawPointerAddr }) else { return }
         if transfers[idx].state != .completed && transfers[idx].state != .cancelled && transfers[idx].state != .failed {
@@ -213,7 +214,7 @@ public final class FileTransferManager {
         transfers[idx].rawPointerAddr = nil
     }
 
-    // C Static Callbacks
+    // C static callbacks
     private static let handleXferNewCallback: adium_purple_on_xfer_new_cb = { xferHandle, who, filename, size, isIncoming in
         guard let xferHandle = xferHandle else { return }
         let addr = UInt(bitPattern: xferHandle)

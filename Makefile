@@ -11,14 +11,8 @@ all: app
 build:
 	swift build -c $(CONFIGURATION)
 
-# purple-gowhatsapp's reference Makefile targets Linux; on macOS the Go runtime
-# additionally needs CoreFoundation/Security and libresolv at link time.
-GOWHATSAPP_LDFLAGS = $(shell pkg-config --libs glib-2.0 purple opusfile gdk-pixbuf-2.0) -framework CoreFoundation -framework Security -lresolv
-
 plugins:
-	$(MAKE) -C Plugins/purple-gowhatsapp libwhatsmeow.so CGO_LDFLAGS="$(GOWHATSAPP_LDFLAGS)"
 	for dir in Plugins/*/; do \
-		[ "$$dir" = "Plugins/purple-gowhatsapp/" ] && continue; \
 		if [ -f "$$dir/Makefile" ]; then $(MAKE) -C "$$dir" || exit 1; fi; \
 	done
 

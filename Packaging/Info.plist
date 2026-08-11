@@ -24,5 +24,9 @@
 	<string>NSApplication</string>
 	<key>NSHighResolutionCapable</key>
 	<true/>
+	<key>NSCameraUsageDescription</key>
+	<string>Adium usa la cámara para las videollamadas de Microsoft Teams.</string>
+	<key>NSMicrophoneUsageDescription</key>
+	<string>Adium usa el micrófono para las llamadas de Microsoft Teams.</string>
 </dict>
 </plist>

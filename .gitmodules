@@ -1,6 +1,0 @@
-[submodule "Plugins/purple-teams"]
-	path = Plugins/purple-teams
-	url = https://github.com/EionRobb/purple-teams.git
-[submodule "Plugins/purple-gowhatsapp"]
-	path = Plugins/purple-gowhatsapp
-	url = https://github.com/hoehermann/purple-gowhatsapp.git

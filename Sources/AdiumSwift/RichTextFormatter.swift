@@ -1,7 +1,7 @@
 import SwiftUI
 
 public enum RichTextFormatter {
-    /// Dictionary of text shortcuts to unicode emojis
+    /// This is a dictionary of text shortcuts to unicode emojis.
     public static let emoticonMap: [String: String] = [
         ":-)" : "😊",
         ":)"  : "😊",
@@ -26,25 +26,23 @@ public enum RichTextFormatter {
         ":rocket:": "🚀"
     ]
 
-    /// Matches a plausible HTML tag: an opening `<` or `</`, followed immediately by a letter
-    /// (real tag names), optional attributes, and a closing `>`. This intentionally does NOT match
-    /// generic "less-than ... greater-than" text like "x<3 and y>2" or `Dictionary<String, Int>`,
-    /// since those either don't start with a letter or aren't followed by whitespace/`/`/`>` right
-    /// after the tag name.
+    /// Match a plausible HTML tag.
+    /// This includes an opening bracket, a letter, optional attributes, and a closing bracket.
+    /// This does not match generic less-than or greater-than text.
     private static let htmlTagRegex: NSRegularExpression = {
         // swiftlint:disable:next force_try
         try! NSRegularExpression(pattern: "</?[a-zA-Z][a-zA-Z0-9]*(?:\\s[^<>]*)?/?>", options: [])
     }()
 
-    /// Returns true only if `text` contains what looks like real HTML markup.
+    /// Return true only if the text contains real HTML markup.
     private static func containsHTMLMarkup(_ text: String) -> Bool {
         let range = NSRange(text.startIndex..., in: text)
         return htmlTagRegex.firstMatch(in: text, options: [], range: range) != nil
     }
 
-    /// Replace textual emoticons with unicode emojis. Only standalone emoticons (delimited by
-    /// whitespace or the ends of the text) are replaced, so substrings of ordinary text like the
-    /// "<3" in "x<3" are left alone.
+    /// Replace textual emoticons with unicode emojis.
+    /// Replace only standalone emoticons.
+    /// Leave substrings of ordinary text alone.
     public static func replaceEmoticons(in text: String) -> String {
         var result = text
         let sortedKeys = emoticonMap.keys.sorted { $0.count > $1.count }
@@ -58,8 +56,7 @@ public enum RichTextFormatter {
         return result
     }
 
-    /// Decode the common HTML entities libpurple/XMPP/Teams may send in message text
-    /// (&amp; &lt; &gt; &quot; &apos; &#39; &nbsp; and numeric &#NNN;/&#xHH; forms).
+    /// Decode the common HTML entities in message text.
     public static func decodeHTMLEntities(_ text: String) -> String {
         guard text.contains("&") else { return text }
 
@@ -71,8 +68,8 @@ public enum RichTextFormatter {
             ("&#39;", "'"),
             ("&lt;", "<"),
             ("&gt;", ">"),
-            // &amp; must be decoded last among named entities so that a (rare) double-encoded
-            // sequence like "&amp;lt;" doesn't accidentally decode all the way to "<" in one pass.
+            // Decode the ampersand entity last among named entities.
+            // This prevents a double-encoded sequence from decoding completely in one pass.
             ("&amp;", "&")
         ]
         for (entity, decoded) in namedEntities {
@@ -108,11 +105,10 @@ public enum RichTextFormatter {
         return result
     }
 
-    /// Escape markdown-significant characters in raw, untrusted message text so that only markdown
-    /// WE generate ourselves (from HTML conversion / auto-linking, below) ends up being interpreted
-    /// by the AttributedString markdown parser. Without this, attacker-controlled text such as
-    /// "[https://mybank.com](https://evil.example)" would render as a spoofed link, and stray
-    /// `*`/`**`/`_` characters would restyle ordinary text.
+    /// Escape markdown characters in raw message text.
+    /// This ensures that the parser interprets only our markdown.
+    /// This prevents attacker-controlled text from rendering as a spoofed link.
+    /// This also prevents stray characters from restyling ordinary text.
     public static func escapeMarkdownSpecialCharacters(_ text: String) -> String {
         var result = ""
         result.reserveCapacity(text.count)
@@ -128,10 +124,9 @@ public enum RichTextFormatter {
         return result
     }
 
-    /// Convert basic HTML tags (sent by libpurple / Jabber / Teams) to Markdown syntax.
-    /// Only touches the text if it actually contains HTML-like markup; otherwise the text is
-    /// returned unchanged (aside from entity decoding), so plain text like "if x<3 and y>2" or
-    /// `Dictionary<String, Int>` is never mistaken for HTML and mangled.
+    /// Convert basic HTML tags to Markdown syntax.
+    /// Modify the text only if it contains HTML markup.
+    /// Return plain text unchanged to prevent mangling.
     public static func convertHTMLToMarkdown(_ htmlText: String) -> String {
         guard containsHTMLMarkup(htmlText) else {
             return decodeHTMLEntities(htmlText)
@@ -139,49 +134,48 @@ public enum RichTextFormatter {
 
         var text = htmlText
 
-        // Replace <br>, <br/>, <br /> with newline
+        // Replace line break tags with a newline character.
         text = text.replacingOccurrences(of: "<br\\s*/?>", with: "\n", options: [.regularExpression, .caseInsensitive])
 
-        // Replace <b>...</b> and <strong>...</strong> with **...**
+        // Replace bold tags with double asterisks.
         text = text.replacingOccurrences(of: "<b(?=[\\s/>])[^>]*>", with: "**", options: [.regularExpression, .caseInsensitive])
         text = text.replacingOccurrences(of: "</b>", with: "**", options: .caseInsensitive)
         text = text.replacingOccurrences(of: "<strong(?=[\\s/>])[^>]*>", with: "**", options: [.regularExpression, .caseInsensitive])
         text = text.replacingOccurrences(of: "</strong>", with: "**", options: .caseInsensitive)
 
-        // Replace <i>...</i> and <em>...</em> with *...*
+        // Replace italic tags with single asterisks.
         text = text.replacingOccurrences(of: "<i(?=[\\s/>])[^>]*>", with: "*", options: [.regularExpression, .caseInsensitive])
         text = text.replacingOccurrences(of: "</i>", with: "*", options: .caseInsensitive)
         text = text.replacingOccurrences(of: "<em(?=[\\s/>])[^>]*>", with: "*", options: [.regularExpression, .caseInsensitive])
         text = text.replacingOccurrences(of: "</em>", with: "*", options: .caseInsensitive)
 
-        // Replace <code>...</code> with `...`
+        // Replace code tags with backticks.
         text = text.replacingOccurrences(of: "<code(?=[\\s/>])[^>]*>", with: "`", options: [.regularExpression, .caseInsensitive])
         text = text.replacingOccurrences(of: "</code>", with: "`", options: .caseInsensitive)
 
-        // Convert <a href="URL">TEXT</a> -> [TEXT](URL)
+        // Convert HTML links to Markdown links.
         let linkPattern = "<a\\s+[^>]*href=[\"']([^\"']+)[\"'][^>]*>(.*?)</a>"
         if let regex = try? NSRegularExpression(pattern: linkPattern, options: .caseInsensitive) {
             let range = NSRange(text.startIndex..., in: text)
             text = regex.stringByReplacingMatches(in: text, options: [], range: range, withTemplate: "[$2]($1)")
         }
 
-        // Strip out remaining unknown HTML tags (like <font ...>, <span>, etc.) using the same
-        // strict "plausible tag" pattern used for detection above, rather than a catch-all
-        // `<[^>]+>` that would also eat plain text like "if x<3 and y>2".
+        // Strip out remaining unknown HTML tags.
+        // Use the strict plausible tag pattern.
+        // Do not use a catch-all pattern that alters plain text.
         let range = NSRange(text.startIndex..., in: text)
         text = htmlTagRegex.stringByReplacingMatches(in: text, options: [], range: range, withTemplate: "")
 
-        // Decode entities last, so a decoded "&lt;" doesn't get reinterpreted as a tag by the
-        // stripping pass above.
+        // Decode entities last.
+        // This prevents the stripping pass from interpreting a decoded bracket as a tag.
         text = decodeHTMLEntities(text)
 
         return text
     }
 
-    /// Automatically convert standalone URLs (http:// or https://) into Markdown links [url](url),
-    /// skipping URLs that are already inside an existing markdown link (as either the label or the
-    /// target), so text already converted to `[url](url)` doesn't get re-linked into nested/broken
-    /// markdown like `[[url](url)]([url](url))`.
+    /// Convert standalone URLs into Markdown links automatically.
+    /// Skip URLs that are already inside an existing Markdown link.
+    /// This prevents nested or broken Markdown.
     public static func autoLinkURLs(in text: String) -> String {
         let urlPattern = "(https?://[\\w\\d\\.#%/\\?=\\-\\+&\\~]+)"
         guard let urlRegex = try? NSRegularExpression(pattern: urlPattern, options: .caseInsensitive) else {
@@ -218,13 +212,11 @@ public enum RichTextFormatter {
         return result
     }
 
-    /// Complete formatting pipeline: Emoticons -> escape raw text -> HTML -> Markdown -> AutoLink -> AttributedString.
-    /// Emoticons go first because many of them contain characters the markdown escape would mangle
-    /// (`:)` -> `:\)`) and emoji are not markdown-significant, so replacing them early is safe.
-    /// The remaining raw text is escaped BEFORE any markdown is generated, so only
-    /// formatter-generated markdown (from real HTML tags or auto-linked URLs) survives to be
-    /// interpreted by the parser; attacker-controlled text containing markdown syntax renders as
-    /// literal text instead.
+    /// Run the complete formatting pipeline.
+    /// Replace emoticons first to prevent mangling by the markdown escape.
+    /// Escape the remaining raw text before you generate any markdown.
+    /// This ensures that the parser interprets only formatter-generated markdown.
+    /// This causes attacker-controlled text to render as literal text.
     public static func formatMessage(_ rawText: String) -> AttributedString {
         let emoticonsReplaced = replaceEmoticons(in: rawText)
         let escaped = escapeMarkdownSpecialCharacters(emoticonsReplaced)
@@ -254,5 +246,6 @@ public struct RichMessageView: View {
     public var body: some View {
         Text(RichTextFormatter.formatMessage(rawText))
             .tint(isFromMe ? .yellow : .accentColor)
+            .textSelection(.enabled)
     }
 }

@@ -50,6 +50,7 @@ public struct TranscriptView: View {
     @State private var selectedHandle: String?
     @State private var exportFormat: TranscriptExportFormat = .plainText
     @State private var exportStatusMessage: String?
+    @State private var handleToDelete: String?
     
     public init() {}
     
@@ -75,8 +76,8 @@ public struct TranscriptView: View {
     
     var currentHandleMessages: [ChatMessage] {
         guard let handle = selectedHandle ?? filteredResults.first?.handle else { return [] }
-        // Only ever show messages that survived the active filters; never fall back
-        // to the full unfiltered log for a handle the filters have excluded.
+        // Only show messages that pass the active filters. Never show the
+        // unfiltered log for a handle that the filters exclude.
         return filteredResults.first(where: { $0.handle == handle })?.messages ?? []
     }
     
@@ -92,17 +93,19 @@ public struct TranscriptView: View {
                 HStack(spacing: 10) {
                     Image(systemName: "magnifyingglass")
                         .foregroundColor(.secondary)
-                    
-                    TextField("Buscar en el historial completo de transcripciones...", text: $searchText)
+                        .accessibilityHidden(true)
+
+                    TextField(t("Search the full transcript history..."), text: $searchText)
                         .textFieldStyle(.plain)
                         .font(.system(size: 12))
-                    
+
                     if !searchText.isEmpty {
                         Button(action: { searchText = "" }) {
                             Image(systemName: "xmark.circle.fill")
                                 .foregroundColor(.secondary)
                         }
                         .buttonStyle(.plain)
+                        .accessibilityLabel(t("Clear search"))
                     }
                 }
                 .padding(.horizontal, 10)
@@ -118,11 +121,11 @@ public struct TranscriptView: View {
                 HStack(spacing: 12) {
                     // Contact Filter
                     HStack(spacing: 4) {
-                        Text("Contacto:")
+                        Text(t("Contact:"))
                             .font(.system(size: 10, weight: .bold))
                             .foregroundColor(.secondary)
                         Picker("", selection: $selectedContactHandle) {
-                            Text("Todos los contactos").tag("ALL")
+                            Text(t("All contacts")).tag("ALL")
                             ForEach(availableHandles, id: \.self) { handle in
                                 let display = bridge.contacts.first(where: { store.sanitizeHandle($0.handle) == handle })?.displayName ?? handle
                                 Text(display).tag(handle)
@@ -135,11 +138,11 @@ public struct TranscriptView: View {
                     
                     // Protocol Filter
                     HStack(spacing: 4) {
-                        Text("Protocolo:")
+                        Text(t("Protocol:"))
                             .font(.system(size: 10, weight: .bold))
                             .foregroundColor(.secondary)
                         Picker("", selection: $selectedProtocolRaw) {
-                            Text("Todos los protocolos").tag("ALL")
+                            Text(t("All protocols")).tag("ALL")
                             ForEach(AccountProtocol.allCases, id: \.rawValue) { proto in
                                 Text(proto.rawValue).tag(proto.rawValue)
                             }
@@ -150,14 +153,14 @@ public struct TranscriptView: View {
                     }
                     
                     // Date Filter Toggle
-                    Toggle("Filtrar Fecha", isOn: $useDateFilter)
+                    Toggle(t("Filter by Date"), isOn: $useDateFilter)
                         .font(.system(size: 10, weight: .medium))
                     
                     if useDateFilter {
                         DatePicker("", selection: $startDate, displayedComponents: .date)
                             .labelsHidden()
                             .font(.system(size: 10))
-                        Text("a")
+                        Text(t("to"))
                             .font(.system(size: 10))
                             .foregroundColor(.secondary)
                         DatePicker("", selection: $endDate, displayedComponents: .date)
@@ -180,7 +183,8 @@ public struct TranscriptView: View {
                     Image(systemName: "doc.text.magnifyingglass")
                         .font(.system(size: 36))
                         .foregroundColor(.secondary)
-                    Text("No se encontraron transcripciones que coincidan con los filtros.")
+                        .accessibilityHidden(true)
+                    Text(t("No transcripts match the filters."))
                         .font(.system(size: 12))
                         .foregroundColor(.secondary)
                     Spacer()
@@ -188,7 +192,7 @@ public struct TranscriptView: View {
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
             } else {
                 HSplitView {
-                    // Left Sidebar: Conversations matching filters
+                    // Left Sidebar: Conversations that match the filters
                     List(filteredResults, id: \.handle, selection: $selectedHandle) { result in
                         let contact = bridge.contacts.first(where: { store.sanitizeHandle($0.handle) == result.handle || $0.handle.caseInsensitiveCompare(result.handle) == .orderedSame })
                         let displayName = contact?.displayName ?? result.handle
@@ -198,6 +202,7 @@ public struct TranscriptView: View {
                             Image(systemName: proto?.iconName ?? "bubble.left.and.bubble.right")
                                 .foregroundColor(.accentColor)
                                 .font(.system(size: 12))
+                                .accessibilityHidden(true)
                             
                             VStack(alignment: .leading, spacing: 2) {
                                 Text(displayName)
@@ -217,6 +222,13 @@ public struct TranscriptView: View {
                         }
                         .tag(result.handle)
                         .padding(.vertical, 2)
+                        .contextMenu {
+                            Button(role: .destructive) {
+                                handleToDelete = result.handle
+                            } label: {
+                                Label(t("Delete Transcript"), systemImage: "trash")
+                            }
+                        }
                     }
                     .listStyle(.sidebar)
                     .frame(minWidth: 200, idealWidth: 240, maxWidth: 300)
@@ -240,9 +252,9 @@ public struct TranscriptView: View {
                                 
                                 Spacer()
                                 
-                                Picker("Formato:", selection: $exportFormat) {
+                                Picker(t("Format:"), selection: $exportFormat) {
                                     ForEach(TranscriptExportFormat.allCases) { format in
-                                        Text(format.rawValue).tag(format)
+                                        Text(format.displayName).tag(format)
                                     }
                                 }
                                 .frame(width: 140)
@@ -251,10 +263,19 @@ public struct TranscriptView: View {
                                 Button(action: {
                                     exportCurrentChat(handle: activeHandle, displayName: displayName, protocolType: proto)
                                 }) {
-                                    Label("Exportar Chat", systemImage: "square.and.arrow.up")
+                                    Label(t("Export Chat"), systemImage: "square.and.arrow.up")
                                         .font(.system(size: 10, weight: .semibold))
                                 }
                                 .buttonStyle(.borderedProminent)
+
+                                Button(action: {
+                                    handleToDelete = activeHandle
+                                }) {
+                                    Label(t("Delete"), systemImage: "trash")
+                                        .font(.system(size: 10, weight: .semibold))
+                                }
+                                .buttonStyle(.bordered)
+                                .help(t("Permanently delete this transcript"))
                             }
                             .padding(.horizontal, 12)
                             .padding(.vertical, 8)
@@ -268,7 +289,7 @@ public struct TranscriptView: View {
                                     ForEach(currentHandleMessages) { msg in
                                         VStack(alignment: .leading, spacing: 3) {
                                             HStack {
-                                                Text(msg.senderName)
+                                                Text(msg.isFromMe ? t("Me") : msg.senderName)
                                                     .font(.system(size: 10, weight: .bold))
                                                     .foregroundColor(msg.isFromMe ? .accentColor : .primary)
                                                 Spacer()
@@ -295,7 +316,7 @@ public struct TranscriptView: View {
                                 .padding(.vertical, 8)
                             }
                         } else {
-                            ContentUnavailableView("Selecciona un chat", systemImage: "message")
+                            ContentUnavailableView(t("Select a chat"), systemImage: "message")
                         }
                     }
                 }
@@ -305,6 +326,7 @@ public struct TranscriptView: View {
                 HStack {
                     Image(systemName: "checkmark.circle.fill")
                         .foregroundColor(.green)
+                        .accessibilityHidden(true)
                     Text(status)
                         .font(.system(size: 10))
                         .foregroundColor(.secondary)
@@ -322,11 +344,38 @@ public struct TranscriptView: View {
             }
         }
         .onChange(of: filteredResults.map(\.handle)) { _, handles in
-            // If the currently selected conversation was filtered out, clear the
-            // selection instead of silently falling back to its unfiltered history.
+            // If the filters remove the selected conversation, clear the selection.
+            // Do not show its unfiltered history.
             if let handle = selectedHandle, !handles.contains(handle) {
                 selectedHandle = handles.first
             }
+        }
+        .alert(
+            t("Delete transcript?"),
+            isPresented: Binding(
+                get: { handleToDelete != nil },
+                set: { if !$0 { handleToDelete = nil } }
+            ),
+            presenting: handleToDelete
+        ) { handle in
+            Button(t("Cancel"), role: .cancel) {}
+            Button(t("Delete"), role: .destructive) {
+                deleteTranscript(handle: handle)
+            }
+        } message: { handle in
+            let display = bridge.contacts.first(where: { store.sanitizeHandle($0.handle) == handle })?.displayName ?? handle
+            Text(t("The chat history with \(display) will be deleted permanently. This action cannot be undone."))
+        }
+    }
+
+    private func deleteTranscript(handle: String) {
+        store.deleteLog(for: handle)
+        // Clear the in-memory cache so an open chat does not re-save the log.
+        if let contact = bridge.contacts.first(where: { store.sanitizeHandle($0.handle) == handle || $0.handle.caseInsensitiveCompare(handle) == .orderedSame }) {
+            bridge.messagesPerContact.removeValue(forKey: contact.id)
+        }
+        if selectedHandle == handle {
+            selectedHandle = nil
         }
     }
     
@@ -334,8 +383,8 @@ public struct TranscriptView: View {
         let panel = NSSavePanel()
         let safeName = store.sanitizeHandle(displayName)
         panel.nameFieldStringValue = "Chat_\(safeName).\(exportFormat.fileExtension)"
-        panel.title = "Exportar Chat (\(exportFormat.rawValue))"
-        panel.prompt = "Guardar"
+        panel.title = t("Export Chat (\(exportFormat.displayName))")
+        panel.prompt = t("Save")
         
         if exportFormat == .json {
             panel.allowedContentTypes = [.json]
@@ -355,9 +404,9 @@ public struct TranscriptView: View {
                         format: exportFormat,
                         to: targetURL
                     )
-                    exportStatusMessage = "Chat exportado exitosamente a \(targetURL.lastPathComponent)"
+                    exportStatusMessage = t("Chat exported successfully to \(targetURL.lastPathComponent)")
                 } catch {
-                    exportStatusMessage = "Error al exportar chat: \(error.localizedDescription)"
+                    exportStatusMessage = t("Failed to export chat: \(error.localizedDescription)")
                 }
             }
         }

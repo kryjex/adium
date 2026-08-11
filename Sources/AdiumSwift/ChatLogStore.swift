@@ -1,14 +1,18 @@
 import Foundation
 
 public enum TranscriptExportFormat: String, CaseIterable, Identifiable, Sendable {
-    case plainText = "Texto Plano (.txt)"
-    case json = "JSON (.json)"
-    
+    case plainText = "txt"
+    case json = "json"
+
     public var id: String { self.rawValue }
-    public var fileExtension: String {
+    public var fileExtension: String { self.rawValue }
+
+    /// This is the localized text for menus.
+    /// The raw value stays stable because it names the file extension.
+    public var displayName: String {
         switch self {
-        case .plainText: return "txt"
-        case .json: return "json"
+        case .plainText: return t("Plain Text (.txt)")
+        case .json: return t("JSON (.json)")
         }
     }
 }
@@ -19,8 +23,12 @@ public final class ChatLogStore {
     public static let shared = ChatLogStore()
     private let fileManager = FileManager.default
     
-    /// Optional custom logs directory for isolated unit tests
+    /// This is an optional custom logs directory for isolated unit tests.
     public var customLogsDirectory: URL?
+
+    /// Bumped on every save/delete. Views read it (via allLogHandles) so
+    /// Observation re-renders them when log files change on disk.
+    public private(set) var revision: Int = 0
     
     public var logsDirectory: URL {
         if let custom = customLogsDirectory {
@@ -42,18 +50,34 @@ public final class ChatLogStore {
         return handle.components(separatedBy: CharacterSet.alphanumerics.union(CharacterSet(charactersIn: "._-")).inverted).joined(separator: "_")
     }
     
-    /// Save conversation history for a contact handle
+    /// Save the conversation history for a contact handle.
     public func saveMessages(_ messages: [ChatMessage], for handle: String) {
         let fileURL = fileURL(for: handle)
         do {
             let data = try JSONEncoder().encode(messages)
             try data.write(to: fileURL)
+            revision += 1
         } catch {
             print("Failed to save chat log for \(handle): \(error)")
         }
     }
+
+    /// Delete the saved conversation history for a contact handle.
+    @discardableResult
+    public func deleteLog(for handle: String) -> Bool {
+        let fileURL = fileURL(for: handle)
+        guard fileManager.fileExists(atPath: fileURL.path) else { return false }
+        do {
+            try fileManager.removeItem(at: fileURL)
+            revision += 1
+            return true
+        } catch {
+            print("Failed to delete chat log for \(handle): \(error)")
+            return false
+        }
+    }
     
-    /// Load conversation history for a contact handle
+    /// Load the conversation history for a contact handle.
     public func loadMessages(for handle: String) -> [ChatMessage]? {
         let fileURL = fileURL(for: handle)
         guard fileManager.fileExists(atPath: fileURL.path) else { return nil }
@@ -66,18 +90,19 @@ public final class ChatLogStore {
         }
     }
     
-    /// Save conversation history for a contact ID (legacy compatibility)
+    /// Save the conversation history for a contact ID for legacy compatibility.
     public func saveMessages(_ messages: [ChatMessage], for contactID: UUID) {
         saveMessages(messages, for: contactID.uuidString)
     }
     
-    /// Load conversation history for a contact ID (legacy compatibility)
+    /// Load the conversation history for a contact ID for legacy compatibility.
     public func loadMessages(for contactID: UUID) -> [ChatMessage]? {
         loadMessages(for: contactID.uuidString)
     }
     
-    /// Returns all saved contact handles / log file keys in the logs directory
+    /// Return all saved contact handles in the logs directory.
     public func allLogHandles() -> [String] {
+        _ = revision
         guard let files = try? fileManager.contentsOfDirectory(at: logsDirectory, includingPropertiesForKeys: nil) else {
             return []
         }
@@ -86,7 +111,7 @@ public final class ChatLogStore {
             .map { $0.deletingPathExtension().lastPathComponent }
     }
     
-    /// Loads all conversation logs present in the logs directory
+    /// Load all conversation logs in the logs directory.
     public func loadAllLogs() -> [String: [ChatMessage]] {
         var logs: [String: [ChatMessage]] = [:]
         for handleKey in allLogHandles() {
@@ -97,7 +122,7 @@ public final class ChatLogStore {
         return logs
     }
     
-    /// Filter chat messages across all logs using handle, protocol, date range, and full-text search
+    /// Filter chat messages across all logs. Use handle, protocol, date range, and full-text search.
     public func filterMessages(
         contactHandle: String? = nil,
         protocolType: AccountProtocol? = nil,
@@ -117,7 +142,7 @@ public final class ChatLogStore {
                 $0.id.uuidString == handleKey
             })
             
-            // Filter by Contact Handle / Name
+            // Filter by contact handle or name.
             if let targetHandle = contactHandle, !targetHandle.isEmpty, targetHandle != "ALL" {
                 let safeTarget = sanitizeHandle(targetHandle)
                 let matchesHandle = handleKey == safeTarget || (matchingContact?.handle.equalsIgnoringCase(targetHandle) ?? false) || (matchingContact?.displayName.equalsIgnoringCase(targetHandle) ?? false)
@@ -126,16 +151,15 @@ public final class ChatLogStore {
                 }
             }
             
-            // Filter by Protocol. If a protocol filter is active but we can't
-            // determine which contact (and therefore protocol) this log belongs to,
-            // exclude it rather than silently letting it through.
+            // Filter by protocol.
+            // Exclude the log if a protocol filter is active but you cannot determine the contact.
             if let targetProtocol = protocolType {
                 guard let contactProto = matchingContact?.accountProtocol, contactProto == targetProtocol else {
                     continue
                 }
             }
 
-            // Filter messages within handle log
+            // Filter messages within the handle log.
             let filteredMsgs = messages.filter { msg in
                 if let start = startDate, msg.timestamp < start {
                     return false
@@ -164,7 +188,7 @@ public final class ChatLogStore {
         return results.sorted { $0.handle < $1.handle }
     }
     
-    /// Export conversation messages to text or JSON file
+    /// Export conversation messages to a text file or a JSON file.
     public func exportTranscript(
         messages: [ChatMessage],
         handle: String,
@@ -184,11 +208,11 @@ public final class ChatLogStore {
             formatter.dateStyle = .medium
             formatter.timeStyle = .medium
             
-            var header = "=== Transcripción de Chat: \(displayName ?? handle) (\(handle)) ===\n"
+            var header = t("=== Chat Transcript: \(displayName ?? handle) (\(handle)) ===") + "\n"
             if let proto = protocolType {
-                header += "Protocolo: \(proto.rawValue)\n"
+                header += t("Protocol: \(proto.rawValue)") + "\n"
             }
-            header += "Total de mensajes: \(messages.count)\n"
+            header += t("Total messages: \(messages.count)") + "\n"
             header += "========================================================\n\n"
             
             let lines = messages.map { msg in
@@ -198,7 +222,7 @@ public final class ChatLogStore {
             
             let content = header + lines.joined(separator: "\n")
             guard let converted = content.data(using: .utf8) else {
-                throw NSError(domain: "TranscriptExport", code: 1, userInfo: [NSLocalizedDescriptionKey: "Error al codificar texto en UTF-8"])
+                throw NSError(domain: "TranscriptExport", code: 1, userInfo: [NSLocalizedDescriptionKey: t("Could not encode the text as UTF-8")])
             }
             data = converted
         }

@@ -6,6 +6,8 @@
 #include <stdlib.h>
 #include <string.h>
 #include <pthread.h>
+#include <sys/socket.h>
+#include <netdb.h>
 
 static bool g_initialized = false;
 static pthread_mutex_t g_status_mutex = PTHREAD_MUTEX_INITIALIZER;
@@ -24,6 +26,7 @@ static adium_purple_on_request_close_cb g_request_close_cb = NULL;
 static adium_purple_on_connection_progress_cb g_connection_progress_cb = NULL;
 static adium_purple_on_typing_cb g_typing_cb = NULL;
 static adium_purple_on_buddy_removed_cb g_buddy_removed_cb = NULL;
+static adium_purple_on_notify_message_cb g_notify_message_cb = NULL;
 
 static adium_purple_on_xfer_new_cb g_xfer_new_cb = NULL;
 static adium_purple_on_xfer_update_cb g_xfer_update_cb = NULL;
@@ -35,10 +38,13 @@ static adium_purple_on_chat_left_cb g_chat_left_cb = NULL;
 static adium_purple_on_chat_message_cb g_chat_message_cb = NULL;
 static adium_purple_on_chat_buddy_joined_cb g_chat_buddy_joined_cb = NULL;
 static adium_purple_on_chat_buddy_left_cb g_chat_buddy_left_cb = NULL;
+static adium_purple_on_chat_listed_cb g_chat_listed_cb = NULL;
+static adium_purple_on_chat_unlisted_cb g_chat_unlisted_cb = NULL;
 
-/* Live PurpleXfer* set, only touched on the purple thread (new_xfer/destroy are UI ops
- * invoked by libpurple itself; do_xfer_accept/do_xfer_cancel run via g_idle_add). Guards
- * against Swift holding a raw pointer to a transfer libpurple already freed. */
+/* This set holds live PurpleXfer pointers, touched only on the purple thread.
+ * libpurple calls the new_xfer and destroy UI ops on that thread. do_xfer_accept
+ * and do_xfer_cancel reach the set through g_idle_add. The set stops Swift from
+ * holding a raw pointer to a transfer libpurple already freed. */
 static GHashTable *g_live_xfers = NULL;
 
 static void ensure_live_xfers_table(void) {
@@ -51,8 +57,9 @@ static void ensure_live_xfers_table(void) {
 
 static void adium_xfer_new_xfer(PurpleXfer *xfer) {
     if (!xfer) return;
-    /* Take our own reference so the xfer can't be freed while Swift holds its address;
-     * released in adium_xfer_destroy (mirrors Pidgin's gtkft.c ref/unref pairing). */
+    /* Take a reference so the xfer cannot be freed while Swift holds its address.
+     * adium_xfer_destroy releases the reference. This mirrors Pidgin's gtkft.c
+     * ref/unref pairing. */
     purple_xfer_ref(xfer);
     ensure_live_xfers_table();
     g_hash_table_add(g_live_xfers, xfer);
@@ -217,8 +224,15 @@ static void* adium_notify_uri(const char *uri) {
     return NULL;
 }
 
+static void* adium_notify_message(PurpleNotifyMsgType type, const char *title, const char *primary, const char *secondary) {
+    if (g_notify_message_cb) {
+        g_notify_message_cb((int)type, title, primary, secondary);
+    }
+    return NULL;
+}
+
 static PurpleNotifyUiOps notify_ui_ops = {
-    .notify_message = NULL,
+    .notify_message = adium_notify_message,
     .notify_email = NULL,
     .notify_emails = NULL,
     .notify_formatted = NULL,
@@ -245,12 +259,13 @@ typedef struct {
     GCallback *action_cbs;
 } AdiumRequestHandle;
 
-/* Live AdiumRequestHandle* set. adium_close_request is the single place that frees a
- * handle; this lets stale respond ops (queued on the purple thread before a handle was
- * closed by libpurple itself, e.g. via purple_request_close_with_handle on disconnect)
- * detect that and become no-ops instead of touching freed memory. Only touched on the
- * purple thread: request_input/request_action/close_request run there directly, and the
- * respond entry points below marshal through g_idle_add before touching the set. */
+/* This set holds live AdiumRequestHandle pointers. adium_close_request is the
+ * only place that frees a handle. A stale respond op can queue before libpurple
+ * closes the handle, for example purple_request_close_with_handle on disconnect.
+ * The set lets that op detect the closed handle and become a no-op instead of
+ * touching freed memory. Only the purple thread touches the set. request_input,
+ * request_action, and close_request run there directly. The respond entry
+ * points below reach the set through g_idle_add. */
 static GHashTable *g_live_requests = NULL;
 
 static void ensure_live_requests_table(void) {
@@ -304,25 +319,41 @@ static void *adium_request_action(const char *title, const char *primary,
     handle->action_cbs = g_new0(GCallback, action_count);
 
     for (size_t i = 0; i < action_count; i++) {
-        action_titles[i] = va_arg(actions, const char *);
+        const char *title = va_arg(actions, const char *);
+        /* Button labels carry a GTK mnemonic marker, for example "_Aceptar". The
+         * code drops the first underscore. Adium's UI has no mnemonic concept. */
+        gchar *clean = g_strdup(title ? title : "");
+        char *underscore = strchr(clean, '_');
+        if (underscore) {
+            memmove(underscore, underscore + 1, strlen(underscore + 1) + 1);
+        }
+        action_titles[i] = clean;
         handle->action_cbs[i] = va_arg(actions, GCallback);
     }
 
     if (g_request_action_cb) {
         ensure_live_requests_table();
         g_hash_table_add(g_live_requests, handle);
+        /* The Swift callback copies the titles synchronously, so they can be
+         * released as soon as it returns. */
         g_request_action_cb((void*)handle, title, primary, secondary, default_action, action_titles, (int)action_count);
+        for (size_t i = 0; i < action_count; i++) {
+            g_free((gpointer)action_titles[i]);
+        }
+        g_free(action_titles);
+        return (void*)handle;
     } else {
         if (default_action >= 0 && (size_t)default_action < action_count && handle->action_cbs[default_action]) {
             ((PurpleRequestActionCb)handle->action_cbs[default_action])(user_data, default_action);
+        }
+        for (size_t i = 0; i < action_count; i++) {
+            g_free((gpointer)action_titles[i]);
         }
         g_free(action_titles);
         g_free(handle->action_cbs);
         g_free(handle);
         return NULL;
     }
-    g_free(action_titles);
-    return (void*)handle;
 }
 
 static void *adium_request_action_with_icon(const char *title, const char *primary,
@@ -339,10 +370,10 @@ static void *adium_request_action_with_icon(const char *title, const char *prima
 static void adium_close_request(PurpleRequestType type, void *ui_handle) {
     (void)type;
     if (!ui_handle) return;
-    /* Single place a handle is removed from the live set and freed, whether we got here
-     * via our own respond ops (below) or libpurple closing the request out from under us
-     * (e.g. purple_request_close_with_handle on disconnect). If it's already gone, this
-     * is a race we lost gracefully rather than a double free. */
+    /* This is the only place that removes a handle from the live set and frees it.
+     * The respond ops below can reach it, or libpurple can close the request first,
+     * for example purple_request_close_with_handle on disconnect. A handle that is
+     * already gone is a lost race, not a double free. */
     if (!g_live_requests || !g_hash_table_contains(g_live_requests, ui_handle)) {
         return;
     }
@@ -379,16 +410,16 @@ static void adium_connection_connect_progress(PurpleConnection *gc, const char *
     const char *username = purple_account_get_username(account);
     const char *proto_id = purple_account_get_protocol_id(account);
 
-    update_status("Conectando %s (%s): %s (%zu/%zu)", username ? username : "", proto_id ? proto_id : "", text ? text : "", step, step_count);
+    update_status("Connecting %s (%s): %s (%zu/%zu)", username ? username : "", proto_id ? proto_id : "", text ? text : "", step, step_count);
     if (g_connection_progress_cb && username && proto_id) {
         g_connection_progress_cb(username, proto_id, text ? text : "", step, step_count);
     }
 }
 
-/* connected/disconnected/report_disconnect_reason are intentionally left unset: the
- * account-signed-on / account-signed-off / account-connection-error signals (connected
- * below in adium_purple_init) already cover the same events, and wiring both here as well
- * fired every connection state change twice into Swift. */
+/* connected, disconnected, and report_disconnect_reason stay unset on purpose.
+ * The account-signed-on, account-signed-off, and account-connection-error
+ * signals in adium_purple_init already cover the same events. Wiring both
+ * paths fires every connection state change twice into Swift. */
 static PurpleConnectionUiOps connection_ui_ops = {
     .connect_progress = adium_connection_connect_progress,
     .connected = NULL,
@@ -421,19 +452,57 @@ static void update_status(const char* fmt, ...) {
     }
 }
 
-static void cb_received_im_msg(PurpleAccount *account, char *sender, char *message, PurpleConversation *conv, PurpleMessageFlags flags, void *data) {
-    (void)account; (void)conv; (void)flags; (void)data;
-    if (g_message_cb && sender && message) {
-        g_message_cb(sender, message, false);
+/* Resolve the imgstore image referenced by an inline <img id="N"> tag, if any.
+ * Only valid while the referenced image is still referenced in the imgstore,
+ * i.e. synchronously within the signal callback. */
+static void extract_inline_image(const char *message, PurpleMessageFlags flags, const void **image_data, size_t *image_size) {
+    (void)flags;
+    *image_data = NULL;
+    *image_size = 0;
+    if (!message) return;
+    /* purple-teams writes <img id='N'> without PURPLE_MESSAGE_IMAGES.
+     * gowhatsapp writes <img id="N"> with the flag. Accept both. */
+    char *img_tag = strstr(message, "<img id=\"");
+    if (!img_tag) img_tag = strstr(message, "<img id='");
+    if (!img_tag) return;
+    int img_id = atoi(img_tag + 9);
+    if (img_id <= 0) return;
+    PurpleStoredImage *img = purple_imgstore_find_by_id(img_id);
+    if (img) {
+        *image_size = purple_imgstore_get_size(img);
+        *image_data = purple_imgstore_get_data(img);
     }
 }
 
-static void cb_sent_im_msg(PurpleAccount *account, const char *receiver, const char *message, void *data) {
-    (void)account; (void)data;
-    if (g_message_cb && receiver && message) {
-        g_message_cb(receiver, message, true);
-    }
+/* Conversation ui op. Every IM write lands here with the real message time.
+ * The conversation signals do not carry mtime, so this is the only capture
+ * point that keeps history timestamps. serv_got_im routes received messages
+ * here, and common_send routes the local echo of a send here. */
+static void adium_write_im(PurpleConversation *conv, const char *who, const char *message, PurpleMessageFlags flags, time_t mtime) {
+    if (!g_message_cb || !conv || !message) return;
+
+    bool is_send = (flags & PURPLE_MESSAGE_SEND) != 0;
+    bool is_recv = (flags & PURPLE_MESSAGE_RECV) != 0;
+    bool is_notice = (flags & (PURPLE_MESSAGE_SYSTEM | PURPLE_MESSAGE_ERROR)) && !is_send && !is_recv;
+    if (!is_send && !is_recv && !is_notice) return;
+
+    PurpleAccount *account = purple_conversation_get_account(conv);
+    const char *protocol_id = account ? purple_account_get_protocol_id(account) : "";
+    const char *account_username = account ? purple_account_get_username(account) : "";
+    /* The conversation name is the remote peer's handle. `who` holds the
+     * sender, which for SEND writes is the local user. */
+    const char *handle = purple_conversation_get_name(conv);
+    if (!handle) handle = who;
+    if (!handle) return;
+
+    const void *image_data = NULL;
+    size_t image_size = 0;
+    extract_inline_image(message, flags, &image_data, &image_size);
+
+    bool is_system = (flags & (PURPLE_MESSAGE_SYSTEM | PURPLE_MESSAGE_ERROR)) != 0;
+    g_message_cb(handle, message, is_send, is_system, protocol_id, account_username, (long long)mtime, image_data, image_size);
 }
+
 
 static void cb_buddy_typing(PurpleAccount *account, const char *name, void *data) {
     (void)account; (void)data;
@@ -481,14 +550,79 @@ static void cb_buddy_status_changed(PurpleBuddy *buddy, PurpleStatus *old_status
     cb_buddy_signed_on_off(buddy, data);
 }
 
+/* The room identifier lives in the chat components. The component key
+ * differs per protocol: teams uses "chatname", most other prpls use "room". */
+static const char* chat_node_room_name(PurpleChat *chat) {
+    GHashTable *components = purple_chat_get_components(chat);
+    if (!components) return NULL;
+    const char *room = g_hash_table_lookup(components, "chatname");
+    if (!room) room = g_hash_table_lookup(components, "room");
+    if (!room) room = g_hash_table_lookup(components, "channel");
+    return room;
+}
+
+static void emit_chat_listed(PurpleChat *chat) {
+    if (!chat || !g_chat_listed_cb) return;
+    const char *room = chat_node_room_name(chat);
+    if (!room || !*room) return;
+    const char *title = purple_chat_get_name(chat);
+    PurpleGroup *group = purple_chat_get_group(chat);
+    const char *group_name = group ? purple_group_get_name(group) : "General";
+    PurpleAccount *account = purple_chat_get_account(chat);
+    const char *username = account ? purple_account_get_username(account) : "";
+    const char *proto_id = account ? purple_account_get_protocol_id(account) : "";
+    g_chat_listed_cb(room, (title && *title) ? title : room, group_name, username, proto_id);
+}
+
+/* Protocol plugins add chat and buddy nodes after the account connects.
+ * These signals surface those late additions. The initial enumeration in
+ * do_load_accounts only covers nodes persisted in blist.xml. */
+static void cb_blist_node_added(PurpleBlistNode *node, void *data) {
+    (void)data;
+    if (!node) return;
+    if (PURPLE_BLIST_NODE_IS_CHAT(node)) {
+        emit_chat_listed((PurpleChat *)node);
+    } else if (PURPLE_BLIST_NODE_IS_BUDDY(node)) {
+        cb_buddy_signed_on_off((PurpleBuddy *)node, NULL);
+    }
+}
+
+static void cb_blist_node_removed(PurpleBlistNode *node, void *data) {
+    (void)data;
+    /* Buddy removals arrive through the "buddy-removed" signal. */
+    if (!node || !PURPLE_BLIST_NODE_IS_CHAT(node) || !g_chat_unlisted_cb) return;
+    PurpleChat *chat = (PurpleChat *)node;
+    const char *room = chat_node_room_name(chat);
+    if (!room || !*room) return;
+    PurpleAccount *account = purple_chat_get_account(chat);
+    g_chat_unlisted_cb(room,
+                       account ? purple_account_get_username(account) : "",
+                       account ? purple_account_get_protocol_id(account) : "");
+}
+
+static void cb_blist_node_aliased(PurpleBlistNode *node, const char *old_alias, void *data) {
+    (void)old_alias;
+    /* An alias change carries the chat title or the buddy display name. */
+    cb_blist_node_added(node, data);
+}
+
 static void cb_account_signed_on(PurpleAccount *account, void *data) {
     (void)data;
     if (!account) return;
     const char *username = purple_account_get_username(account);
     const char *proto_id = purple_account_get_protocol_id(account);
-    update_status("Cuenta conectada: %s (%s)", username, proto_id);
+    /* The UI renders inline images in the chat itself. These options make
+     * purple-gowhatsapp download images and stickers to a temporary location
+     * and display them inline. Without them, every sticker raises a
+     * file-transfer request dialog. The options also drop status broadcasts
+     * (stories), which follows the user preference. */
+    if (proto_id && strcmp(proto_id, "prpl-hehoe-whatsmeow") == 0) {
+        purple_account_set_string(account, "handle-images", "inline");
+        purple_account_set_bool(account, "ignore-status-broadcast", TRUE);
+    }
+    update_status("Account connected: %s (%s)", username, proto_id);
     if (g_account_state_cb) {
-        g_account_state_cb(username, proto_id, true, "Conectado");
+        g_account_state_cb(username, proto_id, true, "Connected");
     }
 }
 
@@ -497,9 +631,9 @@ static void cb_account_signed_off(PurpleAccount *account, void *data) {
     if (!account) return;
     const char *username = purple_account_get_username(account);
     const char *proto_id = purple_account_get_protocol_id(account);
-    update_status("Cuenta desconectada: %s (%s)", username, proto_id);
+    update_status("Account disconnected: %s (%s)", username, proto_id);
     if (g_account_state_cb) {
-        g_account_state_cb(username, proto_id, false, "Desconectado");
+        g_account_state_cb(username, proto_id, false, "Disconnected");
     }
 }
 
@@ -508,9 +642,9 @@ static void cb_account_connection_error(PurpleAccount *account, PurpleConnection
     if (!account) return;
     const char *username = purple_account_get_username(account);
     const char *proto_id = purple_account_get_protocol_id(account);
-    update_status("Error de conexión (%s): %s", username, desc ? desc : "Desconocido");
+    update_status("Connection error (%s): %s", username, desc ? desc : "Unknown");
     if (g_account_state_cb) {
-        g_account_state_cb(username, proto_id, false, desc ? desc : "Error de conexión");
+        g_account_state_cb(username, proto_id, false, desc ? desc : "Connection error");
     }
 }
 
@@ -540,10 +674,10 @@ static void cb_chat_left(PurpleConversation *conv, void *data) {
     }
 }
 
-/* Roster sync for a joined chat's occupants. When a chat is first joined, libpurple fires
- * this once per existing occupant with new_arrival=FALSE (populating the initial roster);
- * later, genuinely new joiners fire it with new_arrival=TRUE. We forward both cases and let
- * Swift pass new_arrival through so it can decide whether to surface a join notification. */
+/* This syncs the roster of a joined chat. On join, libpurple fires this once
+ * per existing occupant with new_arrival=FALSE. A later joiner fires it with
+ * new_arrival=TRUE. The code forwards both cases with new_arrival, so Swift
+ * can decide whether to surface a join notification. */
 static void cb_chat_buddy_joined(PurpleConversation *conv, const char *name, PurpleConvChatBuddyFlags flags, gboolean new_arrival, void *data) {
     (void)flags; (void)data;
     if (!conv || !name) return;
@@ -562,15 +696,38 @@ static void cb_chat_buddy_left(PurpleConversation *conv, const char *name, const
     }
 }
 
-static void cb_received_chat_msg(PurpleAccount *account, char *sender, char *message, PurpleConversation *conv, PurpleMessageFlags flags, void *data) {
-    (void)account; (void)flags; (void)data;
-    if (!conv || !message) return;
+/* Conversation ui op. serv_got_chat_in routes every chat message here with
+ * the real message time. History replays keep their original timestamps.
+ * The server echo of an own send arrives here with PURPLE_MESSAGE_SEND. */
+static void adium_write_chat(PurpleConversation *conv, const char *who, const char *message, PurpleMessageFlags flags, time_t mtime) {
+    if (!g_chat_message_cb || !conv || !message) return;
+    bool is_send = (flags & PURPLE_MESSAGE_SEND) != 0;
+    bool is_recv = (flags & PURPLE_MESSAGE_RECV) != 0;
+    bool is_notice = (flags & (PURPLE_MESSAGE_SYSTEM | PURPLE_MESSAGE_ERROR)) && !is_send && !is_recv;
+    if (!is_send && !is_recv && !is_notice) return;
     const char *room_name = purple_conversation_get_name(conv);
-    if (g_chat_message_cb && room_name) {
-        g_chat_message_cb(room_name, sender ? sender : "", message, false);
+    if (!room_name) return;
+    bool is_system = (flags & (PURPLE_MESSAGE_SYSTEM | PURPLE_MESSAGE_ERROR)) != 0;
+    g_chat_message_cb(room_name, who ? who : "", message, is_send, is_system, (long long)mtime);
+}
+
+/* Conversation ui op for direct purple_conversation_write calls, which
+ * bypass write_im and write_chat: prpl notices, error presentation
+ * (purple_conv_present_error), inline image writes, and echoes of
+ * messages sent from another device. */
+static void adium_write_conv(PurpleConversation *conv, const char *name, const char *alias, const char *message, PurpleMessageFlags flags, time_t mtime) {
+    (void)alias;
+    if (!conv) return;
+    if (purple_conversation_get_type(conv) == PURPLE_CONV_TYPE_CHAT) {
+        adium_write_chat(conv, name, message, flags, mtime);
+    } else {
+        adium_write_im(conv, name, message, flags, mtime);
     }
 }
 
+/* libpurple does not echo own chat sends locally. The server echo can lag,
+ * so this signal shows the message at send time. The Swift layer
+ * deduplicates the later echo from adium_write_chat. */
 static void cb_sent_chat_msg(PurpleAccount *account, const char *message, int id, void *data) {
     (void)data;
     if (!account || !message) return;
@@ -579,9 +736,159 @@ static void cb_sent_chat_msg(PurpleAccount *account, const char *message, int id
     const char *room_name = conv ? purple_conversation_get_name(conv) : NULL;
     const char *username = purple_account_get_username(account);
     if (g_chat_message_cb && room_name) {
-        g_chat_message_cb(room_name, username ? username : "", message, true);
+        g_chat_message_cb(room_name, username ? username : "", message, true, false, 0);
     }
 }
+
+/* --- DNS resolution ui ops ----------------------------------------------
+ * The default libpurple resolver forks a child process for getaddrinfo.
+ * On macOS the forked child of this multi-threaded process aborts inside
+ * getaddrinfo ("os_once_t is corrupt"). These ops resolve on a thread.
+ * resolve_host, dns_deliver, and dns_destroy run on the purple thread.
+ * The worker thread only touches its own copies. */
+
+static GHashTable *g_live_dns = NULL;   /* PurpleDnsQueryData* -> sequence */
+static gsize g_dns_seq = 0;
+
+typedef struct {
+    PurpleDnsQueryData *query;
+    gsize seq;
+    char *hostname;
+    int port;
+    PurpleDnsQueryResolvedCallback resolved_cb;
+    PurpleDnsQueryFailedCallback failed_cb;
+    GSList *hosts;   /* pairs of addrlen and heap sockaddr, dnsquery format */
+    char *error;
+} DnsRequest;
+
+static void dns_request_free(DnsRequest *req) {
+    GSList *l = req->hosts;
+    while (l) {
+        l = g_slist_delete_link(l, l);   /* addrlen entry */
+        if (l) {
+            g_free(l->data);             /* sockaddr copy */
+            l = g_slist_delete_link(l, l);
+        }
+    }
+    g_free(req->hostname);
+    g_free(req->error);
+    g_free(req);
+}
+
+/* This runs on the purple thread. The sequence check drops a late result
+ * when the query died, or when a new query reuses the same address. */
+static gboolean dns_deliver(gpointer user_data) {
+    DnsRequest *req = (DnsRequest *)user_data;
+    gpointer stored = g_live_dns ? g_hash_table_lookup(g_live_dns, req->query) : NULL;
+    if (stored && GPOINTER_TO_SIZE(stored) == req->seq) {
+        g_hash_table_remove(g_live_dns, req->query);
+        if (req->error) {
+            req->failed_cb(req->query, req->error);
+        } else {
+            /* The resolved callback takes ownership of the hosts list. */
+            GSList *hosts = req->hosts;
+            req->hosts = NULL;
+            req->resolved_cb(req->query, hosts);
+        }
+    }
+    dns_request_free(req);
+    return G_SOURCE_REMOVE;
+}
+
+static gpointer dns_worker(gpointer user_data) {
+    DnsRequest *req = (DnsRequest *)user_data;
+    struct addrinfo hints;
+    struct addrinfo *res = NULL;
+    char service[16];
+
+    memset(&hints, 0, sizeof(hints));
+    hints.ai_family = AF_UNSPEC;
+    hints.ai_socktype = SOCK_STREAM;
+    hints.ai_flags = AI_ADDRCONFIG;
+    snprintf(service, sizeof(service), "%d", req->port);
+
+    int rc = getaddrinfo(req->hostname, service, &hints, &res);
+    if (rc == 0) {
+        for (struct addrinfo *ai = res; ai != NULL; ai = ai->ai_next) {
+            req->hosts = g_slist_append(req->hosts, GINT_TO_POINTER(ai->ai_addrlen));
+            req->hosts = g_slist_append(req->hosts, g_memdup2(ai->ai_addr, ai->ai_addrlen));
+        }
+        freeaddrinfo(res);
+        if (!req->hosts) {
+            req->error = g_strdup_printf("No addresses found for %s", req->hostname);
+        }
+    } else {
+        req->error = g_strdup_printf("Could not resolve %s: %s", req->hostname, gai_strerror(rc));
+    }
+
+    g_idle_add(dns_deliver, req);
+    return NULL;
+}
+
+static gboolean adium_dns_resolve_host(PurpleDnsQueryData *query_data,
+                                       PurpleDnsQueryResolvedCallback resolved_cb,
+                                       PurpleDnsQueryFailedCallback failed_cb) {
+    if (!g_live_dns) {
+        g_live_dns = g_hash_table_new(g_direct_hash, g_direct_equal);
+    }
+    DnsRequest *req = g_new0(DnsRequest, 1);
+    req->query = query_data;
+    req->seq = ++g_dns_seq;
+    req->hostname = g_strdup(purple_dnsquery_get_host(query_data));
+    req->port = purple_dnsquery_get_port(query_data);
+    req->resolved_cb = resolved_cb;
+    req->failed_cb = failed_cb;
+    g_hash_table_insert(g_live_dns, query_data, GSIZE_TO_POINTER(req->seq));
+
+    GThread *thread = g_thread_try_new("adium-dns", dns_worker, req, NULL);
+    if (!thread) {
+        /* FALSE hands the query back to the core resolver. */
+        g_hash_table_remove(g_live_dns, query_data);
+        dns_request_free(req);
+        return FALSE;
+    }
+    g_thread_unref(thread);
+    return TRUE;
+}
+
+/* libpurple frees the query after this call. A worker still in flight
+ * finds the entry gone and only frees its own data. */
+static void adium_dns_destroy(PurpleDnsQueryData *query_data) {
+    if (g_live_dns) {
+        g_hash_table_remove(g_live_dns, query_data);
+    }
+}
+
+static PurpleDnsQueryUiOps dnsquery_ui_ops = {
+    .resolve_host = adium_dns_resolve_host,
+    .destroy = adium_dns_destroy,
+    ._purple_reserved1 = NULL,
+    ._purple_reserved2 = NULL,
+    ._purple_reserved3 = NULL,
+    ._purple_reserved4 = NULL
+};
+
+static PurpleConversationUiOps conversation_ui_ops = {
+    .create_conversation = NULL,
+    .destroy_conversation = NULL,
+    .write_chat = adium_write_chat,
+    .write_im = adium_write_im,
+    .write_conv = adium_write_conv,
+    .chat_add_users = NULL,
+    .chat_rename_user = NULL,
+    .chat_remove_users = NULL,
+    .chat_update_user = NULL,
+    .present = NULL,
+    .has_focus = NULL,
+    .custom_smiley_add = NULL,
+    .custom_smiley_write = NULL,
+    .custom_smiley_close = NULL,
+    .send_confirm = NULL,
+    ._purple_reserved1 = NULL,
+    ._purple_reserved2 = NULL,
+    ._purple_reserved3 = NULL,
+    ._purple_reserved4 = NULL
+};
 
 /* --- GLib Main Loop Thread --- */
 
@@ -597,7 +904,7 @@ void adium_purple_start_event_loop(void) {
     pthread_t thread;
     int rc = pthread_create(&thread, NULL, event_loop_thread, NULL);
     if (rc != 0) {
-        update_status("Error al crear hilo de event loop: %d", rc);
+        update_status("Could not create the event loop thread: %d", rc);
         fprintf(stderr, "[CLibpurple] pthread_create failed: %d\n", rc);
         return;
     }
@@ -617,6 +924,8 @@ bool adium_purple_init(const char* custom_plugin_dir, const char* user_dir) {
     purple_debug_set_ui_ops(&debug_ui_ops);
     purple_core_set_ui_ops(&core_ui_ops);
     purple_notify_set_ui_ops(&notify_ui_ops);
+    purple_conversations_set_ui_ops(&conversation_ui_ops);
+    purple_dnsquery_set_ui_ops(&dnsquery_ui_ops);
     purple_request_set_ui_ops(&request_ui_ops);
     purple_connections_set_ui_ops(&connection_ui_ops);
     purple_xfers_set_ui_ops(&xfer_ui_ops);
@@ -626,7 +935,7 @@ bool adium_purple_init(const char* custom_plugin_dir, const char* user_dir) {
     }
 
     if (!purple_core_init("adium-swift")) {
-        update_status("Error al inicializar purple_core");
+        update_status("Could not initialize purple_core");
         return false;
     }
 
@@ -634,15 +943,17 @@ bool adium_purple_init(const char* custom_plugin_dir, const char* user_dir) {
     purple_blist_load();
 
     void *conv_handle = purple_conversations_get_handle();
-    purple_signal_connect(conv_handle, "received-im-msg", &adium_signal_handle, PURPLE_CALLBACK(cb_received_im_msg), NULL);
-    purple_signal_connect(conv_handle, "sent-im-msg", &adium_signal_handle, PURPLE_CALLBACK(cb_sent_im_msg), NULL);
+    /* Message delivery lives in conversation_ui_ops. write_im and write_chat
+     * cover serv_got_im / serv_got_chat_in and the local send echo.
+     * write_conv covers direct purple_conversation_write calls: prpl
+     * notices, error presentation, and multi-device echoes. All three
+     * carry the real mtime, which no conversation signal does. */
     purple_signal_connect(conv_handle, "buddy-typing", &adium_signal_handle, PURPLE_CALLBACK(cb_buddy_typing), NULL);
     purple_signal_connect(conv_handle, "buddy-typing-stopped", &adium_signal_handle, PURPLE_CALLBACK(cb_buddy_typing_stopped), NULL);
     purple_signal_connect(conv_handle, "chat-joined", &adium_signal_handle, PURPLE_CALLBACK(cb_chat_joined), NULL);
     purple_signal_connect(conv_handle, "chat-left", &adium_signal_handle, PURPLE_CALLBACK(cb_chat_left), NULL);
     purple_signal_connect(conv_handle, "chat-buddy-joined", &adium_signal_handle, PURPLE_CALLBACK(cb_chat_buddy_joined), NULL);
     purple_signal_connect(conv_handle, "chat-buddy-left", &adium_signal_handle, PURPLE_CALLBACK(cb_chat_buddy_left), NULL);
-    purple_signal_connect(conv_handle, "received-chat-msg", &adium_signal_handle, PURPLE_CALLBACK(cb_received_chat_msg), NULL);
     purple_signal_connect(conv_handle, "sent-chat-msg", &adium_signal_handle, PURPLE_CALLBACK(cb_sent_chat_msg), NULL);
 
     void *blist_handle = purple_blist_get_handle();
@@ -650,13 +961,16 @@ bool adium_purple_init(const char* custom_plugin_dir, const char* user_dir) {
     purple_signal_connect(blist_handle, "buddy-signed-off", &adium_signal_handle, PURPLE_CALLBACK(cb_buddy_signed_on_off), NULL);
     purple_signal_connect(blist_handle, "buddy-status-changed", &adium_signal_handle, PURPLE_CALLBACK(cb_buddy_status_changed), NULL);
     purple_signal_connect(blist_handle, "buddy-removed", &adium_signal_handle, PURPLE_CALLBACK(cb_buddy_removed), NULL);
+    purple_signal_connect(blist_handle, "blist-node-added", &adium_signal_handle, PURPLE_CALLBACK(cb_blist_node_added), NULL);
+    purple_signal_connect(blist_handle, "blist-node-removed", &adium_signal_handle, PURPLE_CALLBACK(cb_blist_node_removed), NULL);
+    purple_signal_connect(blist_handle, "blist-node-aliased", &adium_signal_handle, PURPLE_CALLBACK(cb_blist_node_aliased), NULL);
 
     void *accounts_handle = purple_accounts_get_handle();
     purple_signal_connect(accounts_handle, "account-signed-on", &adium_signal_handle, PURPLE_CALLBACK(cb_account_signed_on), NULL);
     purple_signal_connect(accounts_handle, "account-signed-off", &adium_signal_handle, PURPLE_CALLBACK(cb_account_signed_off), NULL);
     purple_signal_connect(accounts_handle, "account-connection-error", &adium_signal_handle, PURPLE_CALLBACK(cb_account_connection_error), NULL);
 
-    update_status("Libpurple Core listo");
+    update_status("Libpurple core ready");
     g_initialized = true;
     return true;
 }
@@ -681,16 +995,16 @@ static gboolean do_load_plugin(gpointer user_data) {
     if (!plugin) {
         void* handle = dlopen(plugin_path, RTLD_NOW | RTLD_GLOBAL);
         if (handle) {
-            update_status("Plugin cargado mediante dlopen: %s", plugin_path);
+            update_status("Plugin loaded via dlopen: %s", plugin_path);
         } else {
-            update_status("No se pudo cargar el plugin: %s", plugin_path);
+            update_status("Could not load the plugin: %s", plugin_path);
         }
     } else if (purple_plugin_is_loaded(plugin)) {
-        update_status("Plugin ya activo: %s", purple_plugin_get_name(plugin));
+        update_status("Plugin already active: %s", purple_plugin_get_name(plugin));
     } else if (purple_plugin_load(plugin)) {
-        update_status("Plugin registrado: %s (%s)", purple_plugin_get_name(plugin), purple_plugin_get_id(plugin));
+        update_status("Plugin registered: %s (%s)", purple_plugin_get_name(plugin), purple_plugin_get_id(plugin));
     } else {
-        update_status("Error cargando plugin: %s", purple_plugin_get_name(plugin));
+        update_status("Plugin load error: %s", purple_plugin_get_name(plugin));
     }
 
     g_free(data->plugin_path);
@@ -732,7 +1046,8 @@ void adium_purple_set_extended_event_callbacks(
     adium_purple_on_request_close_cb request_close_cb,
     adium_purple_on_connection_progress_cb connection_progress_cb,
     adium_purple_on_typing_cb typing_cb,
-    adium_purple_on_buddy_removed_cb buddy_removed_cb
+    adium_purple_on_buddy_removed_cb buddy_removed_cb,
+    adium_purple_on_notify_message_cb notify_message_cb
 ) {
     g_request_input_cb = request_input_cb;
     g_request_action_cb = request_action_cb;
@@ -740,6 +1055,7 @@ void adium_purple_set_extended_event_callbacks(
     g_connection_progress_cb = connection_progress_cb;
     g_typing_cb = typing_cb;
     g_buddy_removed_cb = buddy_removed_cb;
+    g_notify_message_cb = notify_message_cb;
 }
 
 typedef struct {
@@ -748,9 +1064,9 @@ typedef struct {
     bool ok;
 } RequestInputRespondData;
 
-/* Runs on the purple thread. Re-checks liveness here (not just at the Swift call site)
- * because the handle may have been closed by libpurple between the respond call being
- * made and this idle callback actually running. */
+/* This runs on the purple thread. It re-checks liveness here, not only at the
+ * Swift call site. libpurple can close the handle after the respond call
+ * starts and before this idle callback runs. */
 static gboolean do_request_input_respond(gpointer user_data) {
     RequestInputRespondData *data = (RequestInputRespondData *)user_data;
     if (!data) return G_SOURCE_REMOVE;
@@ -831,9 +1147,9 @@ static gboolean do_add_account(gpointer user_data) {
         }
         purple_accounts_add(account);
         purple_account_set_enabled(account, "adium-swift", TRUE);
-        update_status("Conectando %s (%s)...", data->username, data->protocol_id);
+        update_status("Connecting %s (%s)...", data->username, data->protocol_id);
     } else {
-        update_status("Error al crear cuenta para %s", data->username);
+        update_status("Could not create the account for %s", data->username);
     }
     g_free(data->username);
     g_free(data->protocol_id);
@@ -865,9 +1181,14 @@ static gboolean do_remove_account(gpointer user_data) {
 
     PurpleAccount *account = purple_accounts_find(data->username, data->protocol_id);
     if (account) {
-        purple_account_set_enabled(account, "adium-swift", FALSE);
-        purple_accounts_remove(account);
-        update_status("Cuenta eliminada: %s (%s)", data->username, data->protocol_id);
+        /* purple_accounts_remove only unlinks the account: the object and
+         * its settings (tokens, sync markers) survive and accounts.xml can
+         * resurrect them. purple_accounts_delete tears down buddies, chats,
+         * conversations, and destroys the account with its settings. */
+        purple_accounts_delete(account);
+        update_status("Account removed: %s (%s)", data->username, data->protocol_id);
+    } else {
+        update_status("Account to remove not found: %s (%s)", data->username, data->protocol_id);
     }
 
     g_free(data->username);
@@ -923,12 +1244,12 @@ static gboolean do_send_message(gpointer user_data) {
         }
         if (conv) {
             purple_conv_im_send(PURPLE_CONV_IM(conv), data->message);
-            update_status("Mensaje enviado a %s", data->recipient);
+            update_status("Message sent to %s", data->recipient);
         } else {
-            update_status("Error creando conversación con %s", data->recipient);
+            update_status("Could not create the conversation with %s", data->recipient);
         }
     } else {
-        update_status("Sin cuentas activas para enviar a %s", data->recipient);
+        update_status("No active accounts to send to %s", data->recipient);
     }
 
     g_free(data->account_username);
@@ -950,6 +1271,78 @@ bool adium_purple_send_message(const char* account_username, const char* protoco
     return true;
 }
 
+/* Thread-safe command execution (e.g. purple-teams' /call) */
+
+typedef struct {
+    char *account_username;
+    char *protocol_id;
+    char *conversation_name;
+    char *command;
+    bool is_chat;
+} ExecCommandData;
+
+static PurpleAccount *find_account_for(const char *account_username, const char *protocol_id) {
+    PurpleAccount *account = NULL;
+    if (account_username && protocol_id && account_username[0] != '\0' && protocol_id[0] != '\0') {
+        account = purple_accounts_find(account_username, protocol_id);
+    }
+    if (!account && protocol_id && protocol_id[0] != '\0') {
+        for (GList *l = purple_accounts_get_all(); l != NULL; l = l->next) {
+            PurpleAccount *acc = (PurpleAccount *)l->data;
+            if (acc && purple_account_get_protocol_id(acc) && strcmp(purple_account_get_protocol_id(acc), protocol_id) == 0) {
+                account = acc;
+                break;
+            }
+        }
+    }
+    return account;
+}
+
+static gboolean do_exec_command(gpointer user_data) {
+    ExecCommandData *data = (ExecCommandData *)user_data;
+    if (!data) return G_SOURCE_REMOVE;
+
+    PurpleAccount *account = find_account_for(data->account_username, data->protocol_id);
+    if (account) {
+        PurpleConversationType type = data->is_chat ? PURPLE_CONV_TYPE_CHAT : PURPLE_CONV_TYPE_IM;
+        PurpleConversation *conv = purple_find_conversation_with_account(type, data->conversation_name, account);
+        if (!conv && !data->is_chat) {
+            conv = purple_conversation_new(PURPLE_CONV_TYPE_IM, account, data->conversation_name);
+        }
+        if (conv) {
+            gchar *error = NULL;
+            PurpleCmdStatus status = purple_cmd_do_command(conv, data->command, data->command, &error);
+            if (status != PURPLE_CMD_STATUS_OK) {
+                update_status("Command /%s failed in %s (%d)", data->command, data->conversation_name, (int)status);
+            }
+            g_free(error);
+        } else {
+            update_status("No conversation %s for the command /%s", data->conversation_name, data->command);
+        }
+    } else {
+        update_status("No active account for the command /%s", data->command);
+    }
+
+    g_free(data->account_username);
+    g_free(data->protocol_id);
+    g_free(data->conversation_name);
+    g_free(data->command);
+    g_free(data);
+    return G_SOURCE_REMOVE;
+}
+
+bool adium_purple_exec_command(const char* account_username, const char* protocol_id, const char* conversation_name, const char* command, bool is_chat) {
+    if (!conversation_name || !command) return false;
+    ExecCommandData *data = g_new0(ExecCommandData, 1);
+    data->account_username = account_username ? g_strdup(account_username) : NULL;
+    data->protocol_id = protocol_id ? g_strdup(protocol_id) : NULL;
+    data->conversation_name = g_strdup(conversation_name);
+    data->command = g_strdup(command);
+    data->is_chat = is_chat;
+    g_idle_add(do_exec_command, data);
+    return true;
+}
+
 static gboolean do_load_accounts(gpointer user_data) {
     (void)user_data;
     for (GList *l = purple_accounts_get_all(); l != NULL; l = l->next) {
@@ -960,7 +1353,7 @@ static gboolean do_load_accounts(gpointer user_data) {
         gboolean is_connected = purple_account_is_connected(account);
 
         if (g_account_state_cb) {
-            g_account_state_cb(username, proto_id, is_connected, is_connected ? "Conectado" : "Desconectado");
+            g_account_state_cb(username, proto_id, is_connected, is_connected ? "Connected" : "Disconnected");
         }
     }
 
@@ -973,7 +1366,15 @@ static gboolean do_load_accounts(gpointer user_data) {
     }
     g_slist_free(buddies);
 
-    update_status("Cuentas y contactos cargados");
+    /* Chat nodes persisted in blist.xml predate the signal connections.
+     * This walk surfaces them once at startup. */
+    for (PurpleBlistNode *node = purple_blist_get_root(); node != NULL; node = purple_blist_node_next(node, TRUE)) {
+        if (PURPLE_BLIST_NODE_IS_CHAT(node)) {
+            emit_chat_listed((PurpleChat *)node);
+        }
+    }
+
+    update_status("Accounts and contacts loaded");
     return G_SOURCE_REMOVE;
 }
 
@@ -995,7 +1396,7 @@ static gboolean do_uninit(gpointer user_data) {
         g_loop = NULL;
     }
     g_initialized = false;
-    update_status("Libpurple apagado");
+    update_status("Libpurple stopped");
     return G_SOURCE_REMOVE;
 }
 
@@ -1034,7 +1435,7 @@ static gboolean do_set_user_status(gpointer user_data) {
             purple_savedstatus_set_message(status, data->message);
         }
         purple_savedstatus_activate(status);
-        update_status("Estado actualizado: %s", data->status_id);
+        update_status("Status updated: %s", data->status_id);
     }
 
     g_free(data->status_id);
@@ -1065,7 +1466,15 @@ typedef struct {
     bool is_int;
     bool is_bool;
     bool bool_value;
+    bool seed_if_missing;
 } SetAccountOptionData;
+
+/* libpurple has no "has setting" query. Two distinct fallbacks detect
+ * the absent key: a stored value returns itself for both. */
+static bool account_int_option_absent(PurpleAccount *account, const char *key) {
+    return purple_account_get_int(account, key, G_MININT) == G_MININT
+        && purple_account_get_int(account, key, G_MININT + 1) == G_MININT + 1;
+}
 
 static gboolean do_set_account_option(gpointer user_data) {
     SetAccountOptionData *data = (SetAccountOptionData *)user_data;
@@ -1074,13 +1483,15 @@ static gboolean do_set_account_option(gpointer user_data) {
     PurpleAccount *account = purple_accounts_find(data->username, data->protocol_id);
     if (account) {
         if (data->is_int) {
-            purple_account_set_int(account, data->key, data->int_value);
+            if (!data->seed_if_missing || account_int_option_absent(account, data->key)) {
+                purple_account_set_int(account, data->key, data->int_value);
+            }
         } else if (data->is_bool) {
             purple_account_set_bool(account, data->key, data->bool_value);
         } else {
             purple_account_set_string(account, data->key, data->value);
         }
-        update_status("Opción de cuenta actualizada: %s [%s]", data->username, data->key);
+        update_status("Account option updated: %s [%s]", data->username, data->key);
     }
 
     g_free(data->username);
@@ -1123,6 +1534,21 @@ bool adium_purple_set_account_int_option(const char* username, const char* proto
     return true;
 }
 
+bool adium_purple_seed_account_int_option(const char* username, const char* protocol_id, const char* key, int value) {
+    if (!username || !protocol_id || !key) return false;
+    SetAccountOptionData *data = g_new0(SetAccountOptionData, 1);
+    data->username = g_strdup(username);
+    data->protocol_id = g_strdup(protocol_id);
+    data->key = g_strdup(key);
+    data->int_value = value;
+    data->is_int = true;
+    data->seed_if_missing = true;
+    /* Always schedule on the default main context. A direct call would
+     * run libpurple on the caller thread during startup. */
+    g_idle_add(do_set_account_option, data);
+    return true;
+}
+
 bool adium_purple_set_account_bool_option(const char* username, const char* protocol_id, const char* key, bool value) {
     if (!username || !protocol_id || !key) return false;
     SetAccountOptionData *data = g_new0(SetAccountOptionData, 1);
@@ -1157,7 +1583,7 @@ static gboolean do_block_contact(gpointer user_data) {
             purple_account_set_privacy_type(account, PURPLE_PRIVACY_DENY_USERS);
         }
         purple_privacy_deny_add(account, data->who, FALSE);
-        update_status("Contacto bloqueado: %s", data->who);
+        update_status("Contact blocked: %s", data->who);
     }
 
     g_free(data->username);
@@ -1188,7 +1614,7 @@ static gboolean do_unblock_contact(gpointer user_data) {
     PurpleAccount *account = purple_accounts_find(data->username, data->protocol_id);
     if (account) {
         purple_privacy_deny_remove(account, data->who, FALSE);
-        update_status("Contacto desbloqueado: %s", data->who);
+        update_status("Contact unblocked: %s", data->who);
     }
 
     g_free(data->username);
@@ -1308,7 +1734,7 @@ static gboolean do_send_file(gpointer user_data) {
     if (!account) {
         /* Do not fall back to an arbitrary account: sending a file from the wrong
          * account is worse than not sending it at all. */
-        update_status("No se pudo enviar archivo: cuenta %s no encontrada", data->account_username ? data->account_username : "?");
+        update_status("Could not send file: account %s not found", data->account_username ? data->account_username : "?");
         g_free(data->account_username);
         g_free(data->protocol_id);
         g_free(data->who);
@@ -1347,13 +1773,17 @@ void adium_purple_set_chat_callbacks(
     adium_purple_on_chat_left_cb chat_left_cb,
     adium_purple_on_chat_message_cb chat_message_cb,
     adium_purple_on_chat_buddy_joined_cb chat_buddy_joined_cb,
-    adium_purple_on_chat_buddy_left_cb chat_buddy_left_cb
+    adium_purple_on_chat_buddy_left_cb chat_buddy_left_cb,
+    adium_purple_on_chat_listed_cb chat_listed_cb,
+    adium_purple_on_chat_unlisted_cb chat_unlisted_cb
 ) {
     g_chat_joined_cb = chat_joined_cb;
     g_chat_left_cb = chat_left_cb;
     g_chat_message_cb = chat_message_cb;
     g_chat_buddy_joined_cb = chat_buddy_joined_cb;
     g_chat_buddy_left_cb = chat_buddy_left_cb;
+    g_chat_listed_cb = chat_listed_cb;
+    g_chat_unlisted_cb = chat_unlisted_cb;
 }
 
 /* Thread-safe group chat (MUC) join */
@@ -1385,9 +1815,9 @@ static gboolean do_join_chat(gpointer user_data) {
         }
         serv_join_chat(gc, components);
         g_hash_table_destroy(components);
-        update_status("Uniendose al grupo %s", data->room_name);
+        update_status("Joining the group %s", data->room_name);
     } else {
-        update_status("No se pudo unir al grupo %s: cuenta no conectada", data->room_name);
+        update_status("Could not join the group %s: account not connected", data->room_name);
     }
 
     g_free(data->username);
@@ -1403,11 +1833,10 @@ bool adium_purple_join_chat(const char* username, const char* protocol_id, const
     data->username = g_strdup(username);
     data->protocol_id = g_strdup(protocol_id);
     data->room_name = g_strdup(room_name);
-    if (g_loop) {
-        g_idle_add(do_join_chat, data);
-    } else {
-        do_join_chat(data);
-    }
+    /* Always schedule on the default main context. g_idle_add queues the
+     * callback correctly even before the loop spins. A direct call here
+     * would run serv_join_chat on the caller thread. */
+    g_idle_add(do_join_chat, data);
     return true;
 }
 
@@ -1430,9 +1859,9 @@ static gboolean do_send_chat_message(gpointer user_data) {
         PurpleConversation *conv = purple_find_conversation_with_account(PURPLE_CONV_TYPE_CHAT, data->room_name, account);
         if (conv) {
             purple_conv_chat_send(PURPLE_CONV_CHAT(conv), data->message);
-            update_status("Mensaje de grupo enviado a %s", data->room_name);
+            update_status("Group message sent to %s", data->room_name);
         } else {
-            update_status("No se encontro la conversacion de grupo %s", data->room_name);
+            update_status("Group conversation %s not found", data->room_name);
         }
     }
 

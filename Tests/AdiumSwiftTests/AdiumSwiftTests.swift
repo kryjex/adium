@@ -85,7 +85,7 @@ struct AdiumSwiftTests {
     @MainActor
     func testPurpleBridgeInitialState() {
         let bridge = PurpleBridgeService.shared
-        // Clean initial state, no fake mocks
+        // The initial state is clean and has no fake mocks.
         #expect(bridge.accounts.isEmpty || !bridge.accounts.contains(where: { $0.username == "ana.garcia@company.com" }))
     }
 
@@ -196,13 +196,13 @@ struct AdiumSwiftTests {
         let password = "SuperSecretPassword123"
         let proto = AccountProtocol.xmpp
 
-        // 1. Connect account (persists to UserDefaults & Keychain)
+        // 1. This connects the account.
         bridge.connectAccount(username: username, protocolType: proto, password: password)
 
         let accountKey = "\(username):\(proto.purpleProtocolID)"
         #expect(KeychainHelper.fetchPassword(for: accountKey) == password)
 
-        // 2. Clear in-memory accounts array and restore from saved defaults
+        // 2. This clears the in-memory accounts and restores from defaults.
         bridge.accounts.removeAll()
         #expect(bridge.accounts.isEmpty)
 
@@ -215,7 +215,7 @@ struct AdiumSwiftTests {
         #expect(restoredAcc.username == username)
         #expect(restoredAcc.accountProtocol == proto)
 
-        // 3. Clean up
+        // 3. This cleans up the state.
         bridge.removeAccount(restoredAcc)
         bridge.accounts.removeAll()
         bridge.restoreSavedAccounts()
@@ -235,7 +235,7 @@ struct AdiumSwiftTests {
 
         let notifService = NotificationService.shared
 
-        // 1. Test direct notification service call
+        // 1. This tests the direct notification service call.
         notifService.notifyIncomingMessage(sender: "Alice", content: "Direct notification test")
         #expect(notifService.lastNotification?.sender == "Alice")
         #expect(notifService.lastNotification?.content == "Direct notification test")
@@ -245,7 +245,7 @@ struct AdiumSwiftTests {
         #expect(notifServiceAlias.lastNotification?.sender == "Bob")
         #expect(notifServiceAlias.lastNotification?.content == "Alias method test")
 
-        // 2. Test incoming message triggers notification via PurpleBridgeService
+        // 2. This tests that an incoming message triggers a notification.
         let bridge = PurpleBridgeService.shared
         let senderHandle = "notifier.sender@test.com"
         let contact = Contact(name: "Notifier Sender", handle: senderHandle, status: .available, accountProtocol: .teams)
@@ -257,12 +257,12 @@ struct AdiumSwiftTests {
         #expect(notifService.lastNotification?.sender == "Notifier Sender")
         #expect(notifService.lastNotification?.content == incomingText)
 
-        // 3. Test outgoing message (isFromMe: true) does NOT update incoming notification state
+        // 3. This tests that an outgoing message does not update the state.
         let outgoingText = "My outgoing response"
         bridge.onMessageReceived(senderHandle: senderHandle, text: outgoingText, isFromMe: true)
         #expect(notifService.lastNotification?.content != outgoingText)
 
-        // Cleanup
+        // This cleans up the state.
         bridge.contacts.removeAll(where: { $0.handle == senderHandle })
     }
 
@@ -280,14 +280,14 @@ struct AdiumSwiftTests {
         let bridge = PurpleBridgeService.shared
         let unknownHandle = "unknown.sender.auto@domain.org"
 
-        // Ensure contact is not present beforehand
+        // This ensures the contact is not present beforehand.
         bridge.contacts.removeAll(where: { $0.handle == unknownHandle })
 
-        // Trigger incoming message from unknown sender
+        // This triggers an incoming message from an unknown sender.
         let messageText = "Auto-created sender message"
         bridge.onMessageReceived(senderHandle: unknownHandle, text: messageText, isFromMe: false)
 
-        // Verify contact was auto-created on-the-fly
+        // This verifies the system auto-created the contact.
         guard let newContact = bridge.contacts.first(where: { $0.handle == unknownHandle }) else {
             #expect(Bool(false), "Unknown sender contact should have been automatically created")
             return
@@ -298,11 +298,11 @@ struct AdiumSwiftTests {
         #expect(newContact.group == "General")
         #expect(newContact.status == .available)
 
-        // Verify message was stored
+        // This verifies the system stored the message.
         let msgs = bridge.messages(for: newContact)
         #expect(msgs.contains(where: { $0.text == messageText }))
 
-        // Cleanup
+        // This cleans up the state.
         bridge.contacts.removeAll(where: { $0.handle == unknownHandle })
     }
 
@@ -317,7 +317,7 @@ struct AdiumSwiftTests {
             try? FileManager.default.removeItem(at: tempLogsDir)
         }
 
-        // 1. Handle indexing with special characters
+        // 1. This uses a handle with special characters.
         let specialHandle = "user+special.handle_123@domain-test.com"
         let handleMsgs = [ChatMessage(senderName: "Tester", isFromMe: false, text: "Special handle text")]
         store.saveMessages(handleMsgs, for: specialHandle)
@@ -326,7 +326,7 @@ struct AdiumSwiftTests {
         #expect(loadedHandleMsgs?.count == 1)
         #expect(loadedHandleMsgs?.first?.text == "Special handle text")
 
-        // 2. Legacy UUID fallback indexing
+        // 2. This uses the legacy UUID fallback.
         let testID = UUID()
         let uuidMsgs = [ChatMessage(senderName: "Me", isFromMe: true, text: "UUID fallback text")]
         store.saveMessages(uuidMsgs, for: testID)
@@ -346,7 +346,7 @@ struct AdiumSwiftTests {
         let acc = Account(username: username, accountProtocol: proto, isConnected: false)
         bridge.accounts.append(acc)
 
-        // 1. Simulate account connected event
+        // 1. This simulates an account connected event.
         bridge.onAccountStateChanged(username: username, protocolId: proto.purpleProtocolID, isConnected: true, statusMsg: "Conectado")
 
         guard let connectedAcc = bridge.accounts.first(where: { $0.username == username }) else {
@@ -356,7 +356,7 @@ struct AdiumSwiftTests {
         #expect(connectedAcc.isConnected == true)
         #expect(connectedAcc.connectionError == nil)
 
-        // 2. Simulate account error event
+        // 2. This simulates an account error event.
         bridge.onAccountStateChanged(username: username, protocolId: proto.purpleProtocolID, isConnected: false, statusMsg: "Error de Autenticación")
 
         guard let erroredAcc = bridge.accounts.first(where: { $0.username == username }) else {
@@ -366,7 +366,7 @@ struct AdiumSwiftTests {
         #expect(erroredAcc.isConnected == false)
         #expect(erroredAcc.connectionError == "Error de Autenticación")
 
-        // Cleanup
+        // This cleans up the state.
         bridge.removeAccount(erroredAcc)
     }
 
@@ -375,32 +375,32 @@ struct AdiumSwiftTests {
     func testContactGroupsManagement() {
         let bridge = PurpleBridgeService.shared
         
-        // 1. Create group
+        // 1. This creates a group.
         bridge.createGroup(name: "Proyecto Alpha")
         #expect(bridge.contactGroups.contains(where: { $0.name == "Proyecto Alpha" }))
         
-        // 2. Toggle expansion
+        // 2. This toggles the expansion.
         bridge.toggleGroupExpanded(name: "Proyecto Alpha")
         let alphaGroup = bridge.contactGroups.first(where: { $0.name == "Proyecto Alpha" })
         #expect(alphaGroup?.isExpanded == false)
         
-        // 3. Move contact to group
+        // 3. This moves the contact to a group.
         let contact = Contact(name: "Carlos V", handle: "carlos@alpha.org", status: .available)
         bridge.contacts.append(contact)
         bridge.moveContact(contact.id, toGroup: "Proyecto Alpha")
         #expect(bridge.contacts.first(where: { $0.id == contact.id })?.group == "Proyecto Alpha")
         
-        // 4. Rename group
+        // 4. This renames the group.
         bridge.renameGroup(oldName: "Proyecto Alpha", newName: "Proyecto Beta")
         #expect(bridge.contactGroups.contains(where: { $0.name == "Proyecto Beta" }))
         #expect(bridge.contacts.first(where: { $0.id == contact.id })?.group == "Proyecto Beta")
         
-        // 5. Delete group
+        // 5. This deletes the group.
         bridge.deleteGroup(name: "Proyecto Beta")
         #expect(!bridge.contactGroups.contains(where: { $0.name == "Proyecto Beta" }))
         #expect(bridge.contacts.first(where: { $0.id == contact.id })?.group == "General")
         
-        // Clean up
+        // This cleans up the state.
         bridge.contacts.removeAll(where: { $0.id == contact.id })
     }
 
@@ -412,7 +412,7 @@ struct AdiumSwiftTests {
         let c2 = Contact(name: "John Personal", handle: "+34600000000", status: .away, accountProtocol: .whatsapp)
         bridge.contacts.append(contentsOf: [c1, c2])
         
-        // 1. Combine into Metacontact
+        // 1. This combines the contacts into a Metacontact.
         let meta = bridge.combineContacts([c1.id, c2.id], name: "John Doe (Combined)")
         #expect(meta.name == "John Doe (Combined)")
         #expect(meta.contactIDs.count == 2)
@@ -420,17 +420,17 @@ struct AdiumSwiftTests {
         #expect(bridge.contacts.first(where: { $0.id == c1.id })?.metacontactID == meta.id)
         #expect(bridge.contacts.first(where: { $0.id == c2.id })?.metacontactID == meta.id)
         
-        // 2. Change primary contact
+        // 2. This changes the primary contact.
         bridge.setPrimaryContact(contactID: c2.id, inMetacontact: meta.id)
         #expect(bridge.metacontacts.first(where: { $0.id == meta.id })?.primaryContactID == c2.id)
         
-        // 3. Unlink metacontact
+        // 3. This unlinks the metacontact.
         bridge.unlinkMetacontact(meta.id)
         #expect(!bridge.metacontacts.contains(where: { $0.id == meta.id }))
         #expect(bridge.contacts.first(where: { $0.id == c1.id })?.metacontactID == nil)
         #expect(bridge.contacts.first(where: { $0.id == c2.id })?.metacontactID == nil)
         
-        // Clean up
+        // This cleans up the state.
         bridge.contacts.removeAll(where: { $0.id == c1.id || $0.id == c2.id })
     }
 
@@ -451,30 +451,30 @@ struct AdiumSwiftTests {
         
         #expect(contact.displayName == "Robert Smith")
         
-        // 1. Set local alias
+        // 1. This sets a local alias.
         bridge.setAlias("Bob", for: contact.id)
         let updatedWithAlias = bridge.contacts.first(where: { $0.id == contact.id })
         #expect(updatedWithAlias?.displayName == "Bob")
         #expect(updatedWithAlias?.alias == "Bob")
         
-        // 2. Toggle blocking
+        // 2. This toggles blocking.
         #expect(updatedWithAlias?.isBlocked == false)
         bridge.toggleBlockContact(contact.id)
         let blockedContact = bridge.contacts.first(where: { $0.id == contact.id })
         #expect(blockedContact?.isBlocked == true)
         
-        // 3. Verify incoming message from blocked contact suppresses notification
+        // 3. This verifies an incoming message from a blocked contact suppresses a notification.
         let notifService = NotificationService.shared
         let initialNotifContent = notifService.lastNotification?.content
         bridge.onMessageReceived(senderHandle: contact.handle, text: "Spam message from blocked user", isFromMe: false)
         #expect(notifService.lastNotification?.content == initialNotifContent)
         
-        // 4. Set avatar data
+        // 4. This sets the avatar data.
         let dummyAvatarData = Data([0x89, 0x50, 0x4E, 0x47])
         bridge.setAvatar(data: dummyAvatarData, for: contact.id)
         #expect(bridge.contacts.first(where: { $0.id == contact.id })?.avatarData == dummyAvatarData)
         
-        // Clean up
+        // This cleans up the state.
         bridge.contacts.removeAll(where: { $0.id == contact.id })
     }
 
@@ -503,7 +503,7 @@ struct AdiumSwiftTests {
         #expect(acc.port == 5222)
         #expect(acc.resource == "AdiumMac")
         
-        // Update account options
+        // This updates the account options.
         bridge.updateAccountOptions(
             accountID: acc.id,
             server: "custom.jabber.server",
@@ -523,7 +523,7 @@ struct AdiumSwiftTests {
         #expect(updatedAcc.resource == "AdiumOffice")
         #expect(updatedAcc.customOptions["connect_server"] == "custom.jabber.server")
         
-        // Clean up
+        // This cleans up the state.
         bridge.removeAccount(updatedAcc)
     }
 
@@ -584,27 +584,27 @@ struct AdiumSwiftTests {
         let c2 = Contact(name: "Buddy Two", handle: "buddy2@test.com", status: .available)
         bridge.contacts.append(contentsOf: [c1, c2])
 
-        // 1. Open tab
+        // 1. This opens a tab.
         bridge.openTab(for: c1.id)
         #expect(bridge.openTabIDs.contains(c1.id))
         #expect(bridge.activeTabID == c1.id)
 
-        // 2. Open second tab
+        // 2. This opens a second tab.
         bridge.openTab(for: c2.id)
         #expect(bridge.openTabIDs.contains(c2.id))
         #expect(bridge.activeTabID == c2.id)
 
-        // 3. Switch active tab back to c1
+        // 3. This switches the active tab back to c1.
         bridge.setActiveTab(c1.id)
         #expect(bridge.activeTabID == c1.id)
 
-        // 4. Unread tracking
+        // 4. This tracks unread messages.
         bridge.unreadCounts[c2.id] = 3
         #expect(bridge.unreadCounts[c2.id] == 3)
         bridge.setActiveTab(c2.id)
         #expect(bridge.unreadCounts[c2.id] == 0)
 
-        // 5. Close tab
+        // 5. This closes the tab.
         bridge.closeTab(c2.id)
         #expect(!bridge.openTabIDs.contains(c2.id))
         #expect(bridge.activeTabID == c1.id)
@@ -613,7 +613,7 @@ struct AdiumSwiftTests {
         #expect(bridge.openTabIDs.isEmpty)
         #expect(bridge.activeTabID == nil)
 
-        // Clean up
+        // This cleans up the state.
         bridge.contacts.removeAll(where: { $0.id == c1.id || $0.id == c2.id })
     }
 
@@ -624,7 +624,7 @@ struct AdiumSwiftTests {
         let account = Account(username: "myuser@teams.com", accountProtocol: .teams)
         bridge.accounts.append(account)
 
-        // 1. Join group chat
+        // 1. This joins a group chat.
         let groupContact = bridge.joinGroupChat(channelName: "Canal General", account: account, topic: "Discusion general")
         #expect(groupContact.isGroupChat == true)
         #expect(groupContact.name == "Canal General")
@@ -632,7 +632,7 @@ struct AdiumSwiftTests {
         #expect(groupContact.groupParticipants.count == 1)
         #expect(bridge.openTabIDs.contains(groupContact.id))
 
-        // 2. Add group participant
+        // 2. This adds a group participant.
         let p2 = GroupParticipant(name: "Ana Gomez", handle: "ana.gomez@teams.com", status: .available, role: "Miembro")
         bridge.addGroupParticipant(contactID: groupContact.id, participant: p2)
 
@@ -640,17 +640,17 @@ struct AdiumSwiftTests {
         #expect(updatedGroup?.groupParticipants.count == 2)
         #expect(updatedGroup?.groupParticipants.contains(where: { $0.handle == "ana.gomez@teams.com" }) == true)
 
-        // 3. Remove group participant
+        // 3. This removes a group participant.
         bridge.removeGroupParticipant(contactID: groupContact.id, participantHandle: "ana.gomez@teams.com")
         let afterRemove = bridge.contacts.first(where: { $0.id == groupContact.id })
         #expect(afterRemove?.groupParticipants.count == 1)
 
-        // 4. Leave group chat
+        // 4. This leaves the group chat.
         bridge.leaveGroupChat(groupContact.id)
         #expect(!bridge.contacts.contains(where: { $0.id == groupContact.id }))
         #expect(!bridge.openTabIDs.contains(groupContact.id))
 
-        // Clean up
+        // This cleans up the state.
         bridge.removeAccount(account)
     }
 
@@ -659,9 +659,9 @@ struct AdiumSwiftTests {
     func testEventManagerRulesAndTriggers() {
         let eventMgr = EventManager.shared
 
-        // `updateRule` below persists into the real UserDefaults under "AdiumEventRules", which
-        // would otherwise permanently overwrite the user's actual sound preferences. Snapshot the
-        // key and the in-memory rule so both can be restored once the test finishes.
+        // The updateRule method persists to UserDefaults.
+        // It uses the AdiumEventRules key.
+        // The test restores the key and rule after it finishes.
         let rulesDefaultsKey = "AdiumEventRules"
         let previousRulesData = UserDefaults.standard.object(forKey: rulesDefaultsKey)
         let previousMessageReceivedRule = eventMgr.rules[.messageReceived]
@@ -676,13 +676,13 @@ struct AdiumSwiftTests {
             }
         }
 
-        // 1. Check default rules exist
+        // 1. This checks that default rules exist.
         #expect(eventMgr.rules[.messageReceived] != nil)
         #expect(eventMgr.rules[.messageSent] != nil)
         #expect(eventMgr.rules[.contactOnline] != nil)
         #expect(eventMgr.rules[.contactOffline] != nil)
 
-        // 2. Update rule
+        // 2. This updates the rule.
         var customRule = eventMgr.rules[.messageReceived]!
         customRule.soundName = "Glass"
         customRule.bounceDock = true
@@ -690,13 +690,13 @@ struct AdiumSwiftTests {
 
         #expect(eventMgr.rules[.messageReceived]?.soundName == "Glass")
 
-        // 3. Trigger event
+        // 3. This triggers the event.
         eventMgr.triggerEvent(.messageReceived, title: "Alice", content: "Test event trigger")
         #expect(eventMgr.lastTriggeredEvent?.type == .messageReceived)
         #expect(eventMgr.lastTriggeredEvent?.title == "Alice")
         #expect(eventMgr.lastTriggeredEvent?.content == "Test event trigger")
 
-        // 4. Unread badge counter
+        // 4. This updates the unread badge counter.
         eventMgr.setUnreadCount(5)
         #expect(eventMgr.unreadCount == 5)
         eventMgr.incrementUnreadCount()
@@ -707,26 +707,26 @@ struct AdiumSwiftTests {
 
     @Test("RichTextFormatter HTML to Markdown, Emoticons, and AutoLinks")
     func testRichTextFormattingAndEmoticons() {
-        // 1. Emoticon replacement
+        // 1. This replaces emoticons.
         let textWithEmoticons = "Hola :) Como estas? :D genial <3"
         let replaced = RichTextFormatter.replaceEmoticons(in: textWithEmoticons)
         #expect(replaced.contains("😊"))
         #expect(replaced.contains("😃"))
         #expect(replaced.contains("❤️"))
 
-        // 2. HTML to Markdown conversion
+        // 2. This converts HTML to Markdown.
         let htmlInput = "Hola <b>Mundo</b><br>Visita <a href=\"https://adium.im\">Adium</a>"
         let converted = RichTextFormatter.convertHTMLToMarkdown(htmlInput)
         #expect(converted.contains("**Mundo**"))
         #expect(converted.contains("[Adium](https://adium.im)"))
         #expect(converted.contains("\n"))
 
-        // 3. Plain URL auto-linking
+        // 3. This auto-links a plain URL.
         let plainURL = "Mira este sitio: https://github.com/adium/adium"
         let autoLinked = RichTextFormatter.autoLinkURLs(in: plainURL)
         #expect(autoLinked.contains("[https://github.com/adium/adium](https://github.com/adium/adium)"))
 
-        // 4. Full pipeline formatMessage
+        // 4. This formats the message through the pipeline.
         let fullFormatted = RichTextFormatter.formatMessage("Probando <i>cursiva</i> :) https://example.com")
         let str = String(fullFormatted.characters)
         #expect(str.contains("😊"))
@@ -741,12 +741,11 @@ struct AdiumSwiftTests {
         #expect(decoded.contains("b > a"))
         #expect(decoded.contains("\"hi\""))
         #expect(decoded.contains("'bye'"))
-        #expect(decoded.contains("\u{00A9}")) // decimal entity: ©
-        #expect(decoded.contains("\u{2764}")) // hex entity: ❤
-        #expect(decoded.contains("\u{00A0}")) // &nbsp;
+        #expect(decoded.contains("\u{00A9}")) // This is a decimal entity.
+        #expect(decoded.contains("\u{2764}")) // This is a hex entity.
+        #expect(decoded.contains("\u{00A0}")) // This is a non-breaking space.
 
-        // Entities must also be decoded through the full pipeline, even for plain text with no
-        // other HTML markup at all.
+        // The pipeline must decode entities for plain text.
         let formatted = RichTextFormatter.formatMessage("Tom &amp; Jerry")
         #expect(String(formatted.characters).contains("Tom & Jerry"))
     }
@@ -774,8 +773,7 @@ struct AdiumSwiftTests {
             if let link = run.link {
                 sawALink = true
                 let label = String(formatted.characters[run.range])
-                // A link that survives formatting must never display one destination while
-                // actually pointing somewhere else -- its label must equal its own target.
+                // A link must point to its label destination.
                 #expect(link.absoluteString == label)
             }
         }
@@ -791,8 +789,8 @@ struct AdiumSwiftTests {
         let alreadyLinked = "[https://x.com](https://x.com)"
         #expect(RichTextFormatter.autoLinkURLs(in: alreadyLinked) == alreadyLinked)
 
-        // An <a> tag whose visible text is itself a URL must convert to a single clean markdown
-        // link, and auto-linking that result again must be a no-op (not nested/broken markdown).
+        // An anchor tag converts to a single markdown link.
+        // Auto-linking the result again makes no changes.
         let converted = RichTextFormatter.convertHTMLToMarkdown("<a href=\"https://x.com\">https://x.com</a>")
         #expect(converted == "[https://x.com](https://x.com)")
         #expect(RichTextFormatter.autoLinkURLs(in: converted) == "[https://x.com](https://x.com)")
@@ -804,7 +802,7 @@ struct AdiumSwiftTests {
         let manager = FileTransferManager.shared
         manager.transfers.removeAll()
 
-        // 1. Initial item creation & properties
+        // 1. This creates an initial item.
         let item = FileTransferItem(
             contactName: "Bob Tester",
             filename: "report.pdf",
@@ -817,15 +815,14 @@ struct AdiumSwiftTests {
         #expect(item.contactName == "Bob Tester")
         #expect(item.filename == "report.pdf")
         #expect(item.progress == 0.5)
-        // Verify the TRANSFERRED amount specifically (not just some substring that happens to
-        // also appear in the total, e.g. "10.5 MB".contains("5 MB") is true even though the
-        // transferred amount is actually 5.2 MB).
+        // This verifies the exact transferred amount.
+        // It does not match a substring.
         let expectedTransferred = ByteCountFormatter.string(fromByteCount: item.transferredBytes, countStyle: .file)
         let expectedTotal = ByteCountFormatter.string(fromByteCount: item.totalBytes, countStyle: .file)
         #expect(item.formattedBytes == "\(expectedTransferred) / \(expectedTotal)")
         #expect(item.formattedBytes.hasPrefix(expectedTransferred))
 
-        // 2. Incoming transfer simulation via onXferNew
+        // 2. This simulates an incoming transfer.
         let rawAddr: UInt = 0xDEADBEEF
         manager.onXferNew(rawPointerAddr: rawAddr, who: "Alice", filename: "photo.png", size: 2_097_152, isIncoming: true)
         
@@ -838,14 +835,14 @@ struct AdiumSwiftTests {
         #expect(addedItem.filename == "photo.png")
         #expect(addedItem.state == .pending)
 
-        // 3. Update progress
+        // 3. This updates the progress.
         manager.onXferUpdate(rawPointerAddr: rawAddr, bytesSent: 1_048_576, totalBytes: 2_097_152, status: 0)
         let updatedItem = manager.transfers.first(where: { $0.rawPointerAddr == rawAddr })
         #expect(updatedItem?.transferredBytes == 1_048_576)
         #expect(updatedItem?.progress == 0.5)
 
-        // 4. Pause and Resume are intentional no-ops (libpurple 2.x has no xfer pause API):
-        // the state must remain unchanged.
+        // 4. Pause and resume make no changes.
+        // The state remains unchanged.
         if let current = updatedItem {
             manager.pauseTransfer(current)
             #expect(manager.transfers.first(where: { $0.rawPointerAddr == rawAddr })?.state == .transferring)
@@ -854,25 +851,24 @@ struct AdiumSwiftTests {
             #expect(manager.transfers.first(where: { $0.rawPointerAddr == rawAddr })?.state == .transferring)
         }
 
-        // 5. Complete transfer
+        // 5. This completes the transfer.
         manager.onXferUpdate(rawPointerAddr: rawAddr, bytesSent: 2_097_152, totalBytes: 2_097_152, status: 0)
         #expect(manager.transfers.first(where: { $0.rawPointerAddr == rawAddr })?.state == .completed)
 
-        // 6. Cancel transfer
+        // 6. This cancels the transfer.
         manager.onXferCancel(rawPointerAddr: rawAddr, byLocal: true)
         #expect(manager.transfers.first(where: { $0.rawPointerAddr == rawAddr })?.state == .cancelled)
 
-        // Clean up
+        // This cleans up the state.
         manager.transfers.removeAll()
     }
 
     @Test("MacOSContactsService contact matching and enrichment")
     @MainActor
     func testMacOSContactsServiceLogic() {
-        // `findMatchingContact` gates all CNContactStore access behind an authorization check, so
-        // in a test/CI environment (where access is virtually never `.authorized`) `linkContact`
-        // is guaranteed to be a safe no-op that never triggers a Contacts (TCC) permission prompt.
-        // This lets us assert the pure enrichment logic without touching the real address book.
+        // The findMatchingContact method checks authorization.
+        // The linkContact method does not prompt for access.
+        // This tests the logic without touching the address book.
         let authStatus = CNContactStore.authorizationStatus(for: .contacts)
         let contactsService = MacOSContactsService.shared
 
@@ -890,14 +886,13 @@ struct AdiumSwiftTests {
         #expect(linkedContact.handle == "carlos.gomez@company.com")
 
         if authStatus != .authorized {
-            // No address book access: the contact must come back completely unchanged rather
-            // than silently querying (and possibly prompting for) Contacts access.
+            // The contact does not change without address book access.
+            // The system does not prompt for access.
             #expect(linkedContact.name == initialContact.name)
             #expect(linkedContact.avatarData == initialContact.avatarData)
         }
 
-        // A contact with a user-set alias must never have its underlying `name` overwritten by
-        // address book enrichment, regardless of whether a match would otherwise be found.
+        // Address book enrichment does not overwrite a user-set alias.
         var aliasedContact = Contact(
             name: "carlos_dev",
             handle: "carlos.gomez@company.com",
@@ -909,7 +904,7 @@ struct AdiumSwiftTests {
         #expect(linkedAliased.name == "carlos_dev")
         #expect(linkedAliased.alias == "My Buddy Carlos")
 
-        // A contact that already has avatar data must never have it replaced by enrichment.
+        // Enrichment does not replace existing avatar data.
         var avatarContact = Contact(
             name: "carlos_dev",
             handle: "carlos.gomez@company.com",
@@ -921,7 +916,7 @@ struct AdiumSwiftTests {
         let linkedAvatar = contactsService.linkContact(avatarContact)
         #expect(linkedAvatar.avatarData == existingAvatar)
 
-        // findMatchingContact itself must not throw/prompt and must return nil for an empty query.
+        // The findMatchingContact method returns nil for an empty query.
         #expect(contactsService.findMatchingContact(email: nil, name: nil) == nil)
     }
 }

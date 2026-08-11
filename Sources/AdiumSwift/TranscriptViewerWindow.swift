@@ -28,7 +28,7 @@ public final class TranscriptViewerWindowController: NSObject, NSWindowDelegate 
             defer: false
         )
         newWindow.center()
-        newWindow.title = "Visor de Transcripciones y Búsqueda - Adium"
+        newWindow.title = t("Transcript Viewer & Search - Adium")
         newWindow.contentViewController = hostingController
         newWindow.isReleasedWhenClosed = false
         newWindow.delegate = self
