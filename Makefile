@@ -4,19 +4,14 @@ APP=$(BUILD_DIR)/Adium.app
 BIN_PATH=$(shell swift build -c $(CONFIGURATION) --show-bin-path)
 RESOURCE_BUNDLE=AdiumSwift_AdiumSwift.bundle
 
-.PHONY: all build plugins app run install clean
+.PHONY: all build app run install clean
 
 all: app
 
 build:
 	swift build -c $(CONFIGURATION)
 
-plugins:
-	for dir in Plugins/*/; do \
-		if [ -f "$$dir/Makefile" ]; then $(MAKE) -C "$$dir" || exit 1; fi; \
-	done
-
-app: build plugins
+app: build
 	rm -rf $(APP)
 	mkdir -p $(APP)/Contents/MacOS $(APP)/Contents/Resources $(APP)/Contents/PlugIns
 	cp Packaging/Info.plist $(APP)/Contents/Info.plist
@@ -24,10 +19,6 @@ app: build plugins
 	cp $(BIN_PATH)/AdiumSwift $(APP)/Contents/MacOS/AdiumSwift
 	cp -R $(BIN_PATH)/$(RESOURCE_BUNDLE) $(APP)/Contents/Resources/
 	cp Sources/AdiumSwift/Resources/AppIcon.icns $(APP)/Contents/Resources/AppIcon.icns
-	for plugin in Plugins/*/*.so; do \
-		case "$$plugin" in Plugins/template/*) continue;; esac; \
-		if [ -f "$$plugin" ]; then cp "$$plugin" $(APP)/Contents/PlugIns/; fi; \
-	done
 	codesign --force --sign - $(APP)
 	@echo "Built $(APP)"
 
