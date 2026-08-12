@@ -28,5 +28,16 @@
 	<string>Adium usa la cámara para las videollamadas de Microsoft Teams.</string>
 	<key>NSMicrophoneUsageDescription</key>
 	<string>Adium usa el micrófono para las llamadas de Microsoft Teams.</string>
+	<key>CFBundleLocalizations</key>
+	<array>
+		<string>en</string>
+		<string>es</string>
+		<string>de</string>
+		<string>sv</string>
+		<string>nb</string>
+		<string>it</string>
+		<string>fr</string>
+		<string>ru</string>
+	</array>
 </dict>
 </plist>

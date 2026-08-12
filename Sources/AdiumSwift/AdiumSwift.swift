@@ -16,6 +16,10 @@ struct AdiumSwiftApp: App {
     @State private var selectedContactID: UUID?
     
     init() {
+        // Set this before AppKit reads its own resources, so the stock menu
+        // items (File, Edit, About, Hide, Quit, Services...) pick up the
+        // app language too. See AppLanguage.syncSystemPreferredLanguage.
+        AppLanguage.syncSystemPreferredLanguage()
         NSApplication.shared.setActivationPolicy(.regular)
         NSApplication.shared.activate(ignoringOtherApps: true)
         PurpleBridgeService.shared.initializeLibpurpleCore()

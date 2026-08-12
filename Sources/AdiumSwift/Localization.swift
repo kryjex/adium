@@ -51,4 +51,19 @@ public enum AppLanguage {
         }
         return languageBundle
     }()
+
+    /// This mirrors the chosen language into the OS preferred-language list.
+    /// `t()` only covers this app's own strings. AppKit and SwiftUI render
+    /// their stock menu items (File, Edit, Window, About, Hide, Quit,
+    /// Services...) from "AppleLanguages", not from `bundle`. Call this once,
+    /// before AppKit reads its resources, so those items follow the app
+    /// language too. Like `bundle`, the change applies after a restart.
+    public static func syncSystemPreferredLanguage() {
+        let code = UserDefaults.standard.string(forKey: defaultsKey) ?? ""
+        if code.isEmpty {
+            UserDefaults.standard.removeObject(forKey: "AppleLanguages")
+        } else {
+            UserDefaults.standard.set([code], forKey: "AppleLanguages")
+        }
+    }
 }
