@@ -11,11 +11,11 @@
         "en": "Microsoft Teams chat, group chats, and call links through the Teams web services.",
         "es": "Chat de Microsoft Teams, chats grupales y enlaces de llamada a través de los servicios web de Teams."
       },
-      "version": "2026.06.15",
-      "binaryUrl": "https://github.com/kryjex/adium-plugins-catalog/releases/download/plugins-v1/libteams.so",
-      "sha256": "4f39dd944c203fc22c2b6af6e26bad6b5b8a72550f5dcd9a9f8f85fa9de32ffd",
+      "version": "2026.08.11",
+      "binaryUrl": "https://github.com/kryjex/adium-plugins-catalog/releases/download/plugins-v3/libteams.so",
+      "sha256": "70cbdf950945e643a42ea0c758d5a17f2b5ca610dd91c470c4f409ed78880aa1",
       "sourceUrl": "https://github.com/EionRobb/purple-teams",
-      "sourceRef": "f903669b337ad8efabf134595147cc2db039de7a",
+      "sourceRef": "df1e04bead81ff60bb25370c4474991d3fa3fd42",
       "license": "GPL-3.0"
     },
     {
@@ -28,11 +28,11 @@
         "en": "Microsoft Teams for personal Microsoft accounts, through the Teams web services.",
         "es": "Microsoft Teams para cuentas personales de Microsoft, a través de los servicios web de Teams."
       },
-      "version": "2026.06.15",
-      "binaryUrl": "https://github.com/kryjex/adium-plugins-catalog/releases/download/plugins-v1/libteams-personal.so",
-      "sha256": "cf1ccea45105676dc4a59741508f55b0319a4c34a31d8e0c18f0a99e8f80eba1",
+      "version": "2026.08.11",
+      "binaryUrl": "https://github.com/kryjex/adium-plugins-catalog/releases/download/plugins-v3/libteams-personal.so",
+      "sha256": "40633c1781ed36e8cd652c50870dce4eda8617a56de49bfff165952e3b7f438a",
       "sourceUrl": "https://github.com/EionRobb/purple-teams",
-      "sourceRef": "f903669b337ad8efabf134595147cc2db039de7a",
+      "sourceRef": "df1e04bead81ff60bb25370c4474991d3fa3fd42",
       "license": "GPL-3.0"
     },
     {
@@ -45,11 +45,11 @@
         "en": "WhatsApp messaging through the whatsmeow library, with QR-code device pairing.",
         "es": "Mensajería de WhatsApp mediante la librería whatsmeow, con vinculación por código QR."
       },
-      "version": "2026.03.29",
-      "binaryUrl": "https://github.com/kryjex/adium-plugins-catalog/releases/download/plugins-v1/libwhatsmeow.so",
-      "sha256": "7f6730c07308aecb9a3cc3dba7798efd78cfd7de2a0bc68406282e945de003d6",
+      "version": "2026.08.11",
+      "binaryUrl": "https://github.com/kryjex/adium-plugins-catalog/releases/download/plugins-v3/libwhatsmeow.so",
+      "sha256": "8c8b5baa0c15a324ea3fa9af8d6f381cd1dd80654f72190764f4b4764f743b18",
       "sourceUrl": "https://github.com/hoehermann/purple-gowhatsapp",
-      "sourceRef": "5a436315caefd3b89c2b631a7b8028742e58f047",
+      "sourceRef": "5a725916f15322751421ed07351eb9378169c062",
       "license": "GPL-3.0"
     }
   ]
