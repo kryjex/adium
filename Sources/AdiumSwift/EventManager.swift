@@ -7,6 +7,12 @@ public enum AdiumEventType: String, Codable, CaseIterable, Identifiable {
     case messageSent = "messageSent"
     case contactOnline = "contactOnline"
     case contactOffline = "contactOffline"
+    case accountConnected = "accountConnected"
+    case accountDisconnected = "accountDisconnected"
+    case transferCompleted = "transferCompleted"
+    case transferFailed = "transferFailed"
+    case groupMention = "groupMention"
+    case messageSendError = "messageSendError"
 
     public var id: String { rawValue }
 
@@ -18,6 +24,12 @@ public enum AdiumEventType: String, Codable, CaseIterable, Identifiable {
         case .messageSent: return t("Message Sent")
         case .contactOnline: return t("Contact Online")
         case .contactOffline: return t("Contact Offline")
+        case .accountConnected: return t("Account Connected")
+        case .accountDisconnected: return t("Account Disconnected")
+        case .transferCompleted: return t("File Transfer Completed")
+        case .transferFailed: return t("File Transfer Failed")
+        case .groupMention: return t("Mention in Group Chat")
+        case .messageSendError: return t("Message Send Error")
         }
     }
 
@@ -27,6 +39,12 @@ public enum AdiumEventType: String, Codable, CaseIterable, Identifiable {
         case .messageSent: return "Pop"
         case .contactOnline: return "Glass"
         case .contactOffline: return "Basso"
+        case .accountConnected: return "Purr"
+        case .accountDisconnected: return "Basso"
+        case .transferCompleted: return "Hero"
+        case .transferFailed: return "Basso"
+        case .groupMention: return "Ping"
+        case .messageSendError: return "Sosumi"
         }
     }
 }
@@ -101,6 +119,20 @@ public final class EventManager {
                     defaultRule = EventRule(eventType: .contactOnline, playSound: true, soundName: "Glass", bounceDock: false, updateBadge: false, showNotification: true)
                 case .contactOffline:
                     defaultRule = EventRule(eventType: .contactOffline, playSound: true, soundName: "Basso", bounceDock: false, updateBadge: false, showNotification: false)
+                case .accountConnected:
+                    defaultRule = EventRule(eventType: .accountConnected, playSound: true, soundName: "Purr", bounceDock: false, updateBadge: false, showNotification: true)
+                case .accountDisconnected:
+                    defaultRule = EventRule(eventType: .accountDisconnected, playSound: true, soundName: "Basso", bounceDock: false, updateBadge: false, showNotification: true)
+                case .transferCompleted:
+                    defaultRule = EventRule(eventType: .transferCompleted, playSound: true, soundName: "Hero", bounceDock: false, updateBadge: false, showNotification: true)
+                case .transferFailed:
+                    defaultRule = EventRule(eventType: .transferFailed, playSound: true, soundName: "Basso", bounceDock: false, updateBadge: false, showNotification: true)
+                case .groupMention:
+                    // A mention behaves like a received message: badge and
+                    // bounce included. The caller owns the unread count.
+                    defaultRule = EventRule(eventType: .groupMention, playSound: true, soundName: "Ping", bounceDock: true, updateBadge: true, showNotification: true)
+                case .messageSendError:
+                    defaultRule = EventRule(eventType: .messageSendError, playSound: true, soundName: "Sosumi", bounceDock: false, updateBadge: false, showNotification: true)
                 }
                 rules[eventType] = defaultRule
             }

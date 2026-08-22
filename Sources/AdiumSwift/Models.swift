@@ -71,6 +71,7 @@ public enum AccountProtocol: String, Codable, CaseIterable, Sendable {
 public enum ContactSortOrder: String, Codable, CaseIterable {
     case name = "name"
     case status = "status"
+    case byActivity = "byActivity"
 
     /// This is the localized text for menus.
     /// The raw value stays stable because it persists in UserDefaults.
@@ -78,6 +79,24 @@ public enum ContactSortOrder: String, Codable, CaseIterable {
         switch self {
         case .name: return t("By Name")
         case .status: return t("By Status")
+        case .byActivity: return t("By Activity")
+        }
+    }
+}
+
+/// This is how the contact list builds its sections. Manual keeps the
+/// user-managed groups; provider and account derive sections from the
+/// contact's protocol and owning account.
+public enum ContactGroupingMode: String, Codable, CaseIterable {
+    case manual = "manual"
+    case provider = "provider"
+    case account = "account"
+
+    public var displayName: String {
+        switch self {
+        case .manual: return t("Custom Groups")
+        case .provider: return t("By Provider")
+        case .account: return t("By Account")
         }
     }
 }
@@ -226,10 +245,10 @@ public struct Contact: Identifiable, Hashable, Codable {
     // Advanced contact fields
     public var alias: String?
     public var isBlocked: Bool
+    public var isMuted: Bool
     public var metacontactID: UUID?
     public var avatarData: Data?
     public var isTyping: Bool
-    
     // Group chat fields
     public var isGroupChat: Bool
     public var groupParticipants: [GroupParticipant]
@@ -255,6 +274,7 @@ public struct Contact: Identifiable, Hashable, Codable {
         accountUsername: String? = nil,
         alias: String? = nil,
         isBlocked: Bool = false,
+        isMuted: Bool = false,
         metacontactID: UUID? = nil,
         avatarData: Data? = nil,
         isTyping: Bool = false,
@@ -273,6 +293,7 @@ public struct Contact: Identifiable, Hashable, Codable {
         self.accountUsername = accountUsername
         self.alias = alias
         self.isBlocked = isBlocked
+        self.isMuted = isMuted
         self.metacontactID = metacontactID
         self.avatarData = avatarData
         self.isTyping = isTyping
@@ -287,7 +308,7 @@ public struct Contact: Identifiable, Hashable, Codable {
     // then erase all saved contacts, and old backups fail to import.
     enum CodingKeys: String, CodingKey {
         case id, name, handle, status, customStatusMessage, group, accountProtocol, avatarURL, accountUsername
-        case alias, isBlocked, metacontactID, avatarData, isTyping
+        case alias, isBlocked, isMuted, metacontactID, avatarData, isTyping
         case isGroupChat, groupParticipants, topic
     }
 
@@ -304,6 +325,7 @@ public struct Contact: Identifiable, Hashable, Codable {
         accountUsername = try container.decodeIfPresent(String.self, forKey: .accountUsername)
         alias = try container.decodeIfPresent(String.self, forKey: .alias)
         isBlocked = try container.decodeIfPresent(Bool.self, forKey: .isBlocked) ?? false
+        isMuted = try container.decodeIfPresent(Bool.self, forKey: .isMuted) ?? false
         metacontactID = try container.decodeIfPresent(UUID.self, forKey: .metacontactID)
         avatarData = try container.decodeIfPresent(Data.self, forKey: .avatarData)
         isTyping = try container.decodeIfPresent(Bool.self, forKey: .isTyping) ?? false

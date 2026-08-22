@@ -24,6 +24,7 @@ struct AdiumSwiftApp: App {
         NSApplication.shared.activate(ignoringOtherApps: true)
         PurpleBridgeService.shared.initializeLibpurpleCore()
         FileTransferManager.shared.registerPurpleCallbacks()
+        IdleMonitor.shared.start()
     }
     
     var body: some Scene {
@@ -46,6 +47,29 @@ struct AdiumSwiftApp: App {
         }
         .windowStyle(.titleBar)
         .windowToolbarStyle(.unifiedCompact)
+
+        MenuBarExtra {
+            ForEach(OnlineStatus.allCases, id: \.self) { status in
+                Button(statusLabel(status)) {
+                    bridge.setUserStatus(status)
+                }
+                .disabled(status == bridge.myStatus)
+            }
+            Divider()
+            Button(t("Open Adium")) {
+                NSApplication.shared.activate(ignoringOtherApps: true)
+            }
+        } label: {
+            // The unread total rides on the menu bar icon, like the
+            // classic dock badge.
+            HStack(spacing: 2) {
+                Image(systemName: "bird")
+                if bridge.unreadCounts.values.reduce(0, +) > 0 {
+                    Text("\(bridge.unreadCounts.values.reduce(0, +))")
+                }
+            }
+        }
+        .menuBarExtraStyle(.menu)
         
         Settings {
             PreferencesView()

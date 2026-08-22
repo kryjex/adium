@@ -192,6 +192,11 @@ public final class FileTransferManager {
 
         if bytesSent >= transfers[idx].totalBytes && transfers[idx].totalBytes > 0 {
             transfers[idx].state = .completed
+            EventManager.shared.triggerEvent(
+                .transferCompleted,
+                title: transfers[idx].contactName,
+                content: transfers[idx].filename
+            )
         } else if transfers[idx].state == .pending || transfers[idx].state == .transferring {
             transfers[idx].state = .transferring
         }
@@ -210,6 +215,11 @@ public final class FileTransferManager {
         guard let idx = transfers.firstIndex(where: { $0.rawPointerAddr == rawPointerAddr }) else { return }
         if transfers[idx].state != .completed && transfers[idx].state != .cancelled && transfers[idx].state != .failed {
             transfers[idx].state = .failed
+            EventManager.shared.triggerEvent(
+                .transferFailed,
+                title: transfers[idx].contactName,
+                content: transfers[idx].filename
+            )
         }
         transfers[idx].rawPointerAddr = nil
     }

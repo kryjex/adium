@@ -705,10 +705,15 @@ static void adium_write_chat(PurpleConversation *conv, const char *who, const ch
     bool is_recv = (flags & PURPLE_MESSAGE_RECV) != 0;
     bool is_notice = (flags & (PURPLE_MESSAGE_SYSTEM | PURPLE_MESSAGE_ERROR)) && !is_send && !is_recv;
     if (!is_send && !is_recv && !is_notice) return;
+    PurpleAccount *account = purple_conversation_get_account(conv);
+    if (!account) return;
     const char *room_name = purple_conversation_get_name(conv);
     if (!room_name) return;
     bool is_system = (flags & (PURPLE_MESSAGE_SYSTEM | PURPLE_MESSAGE_ERROR)) != 0;
-    g_chat_message_cb(room_name, who ? who : "", message, is_send, is_system, (long long)mtime);
+    g_chat_message_cb(room_name,
+                      purple_account_get_username(account),
+                      purple_account_get_protocol_id(account),
+                      who ? who : "", message, is_send, is_system, (long long)mtime);
 }
 
 /* Conversation ui op for direct purple_conversation_write calls, which
@@ -734,9 +739,13 @@ static void cb_sent_chat_msg(PurpleAccount *account, const char *message, int id
     PurpleConnection *gc = purple_account_get_connection(account);
     PurpleConversation *conv = gc ? purple_find_chat(gc, id) : NULL;
     const char *room_name = conv ? purple_conversation_get_name(conv) : NULL;
-    const char *username = purple_account_get_username(account);
     if (g_chat_message_cb && room_name) {
-        g_chat_message_cb(room_name, username ? username : "", message, true, false, 0);
+        /* The sender is the account itself: this is the local echo. */
+        g_chat_message_cb(room_name,
+                          purple_account_get_username(account),
+                          purple_account_get_protocol_id(account),
+                          purple_account_get_username(account),
+                          message, true, false, 0);
     }
 }
 

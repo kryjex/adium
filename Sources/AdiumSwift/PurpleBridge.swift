@@ -35,6 +35,11 @@ public final class PurpleBridgeService {
     public var activeTabID: UUID? = nil
     public var unreadCounts: [UUID: Int] = [:]
 
+    /// Last message date per contact for the By Activity sort. Hydrated
+    /// from the logs once, then refreshed on every appended message.
+    public internal(set) var lastActivityDates: [UUID: Date] = [:]
+    private var lastActivityHydrated = false
+
     /// This contains addresses of active libpurple request handles.
     /// The UI shows these requests as an NSAlert.
     /// onRequestClose removes these addresses.
@@ -829,9 +834,10 @@ public final class PurpleBridgeService {
     private func ensureGroupChatJoined(_ contactID: UUID) {
         guard let contact = contacts.first(where: { $0.id == contactID }),
               contact.isGroupChat,
-              !joinedChatRooms.contains(contact.handle),
               let username = contact.accountUsername else { return }
-        _ = adium_purple_join_chat(username, contact.accountProtocol.purpleProtocolID, contact.handle)
+        let proto = contact.accountProtocol.purpleProtocolID
+        guard !isChatJoined(username: username, protocolId: proto, roomName: contact.handle) else { return }
+        _ = adium_purple_join_chat(username, proto, contact.handle)
     }
     
     public func closeTab(_ contactID: UUID) {
@@ -935,12 +941,14 @@ public final class PurpleBridgeService {
     public func sendMessage(_ text: String, to contact: Contact) {
         if contact.isBlocked {
             connectionState = t("Cannot send: \(contact.displayName) is blocked")
+            EventManager.shared.triggerEvent(.messageSendError, title: contact.displayName, content: t("The contact is blocked."), contactID: contact.id)
             return
         }
 
         let account = resolveAccount(for: contact)
         if isLibpurpleLoaded && account == nil {
             connectionState = t("Could not send message: no account found for \(contact.displayName)")
+            EventManager.shared.triggerEvent(.messageSendError, title: contact.displayName, content: t("No connected account for this contact."), contactID: contact.id)
             return
         }
 
@@ -1056,7 +1064,13 @@ public final class PurpleBridgeService {
     }
     
     func onMessageReceived(senderHandle: String, text: String, isFromMe: Bool, protocolId: String? = nil, accountUsername: String? = nil, image: Data? = nil, timestamp: Int64 = 0, isSystem: Bool = false) {
-        var contact = contacts.first(where: { $0.handle == senderHandle && (protocolId == nil || $0.accountProtocol.purpleProtocolID == protocolId) })
+        // The account match wins so two accounts sharing a contact handle
+        // do not steal each other's messages.
+        var contact = contacts.first(where: {
+            $0.handle == senderHandle
+                && (protocolId == nil || $0.accountProtocol.purpleProtocolID == protocolId)
+                && (accountUsername == nil || $0.accountUsername == nil || $0.accountUsername == accountUsername)
+        })
 
         // A contact with this handle can exist under the wrong protocol.
         // The code keys chat logs by handle.
@@ -1128,6 +1142,7 @@ public final class PurpleBridgeService {
         if let updatedMsgs = messagesPerContact[c.id] {
             ChatLogStore.shared.saveMessages(updatedMsgs, for: c.handle)
         }
+        lastActivityDates[c.id] = msgDate
         
         if !isFromMe {
             if activeTabID != c.id {
@@ -1135,11 +1150,14 @@ public final class PurpleBridgeService {
                 let totalUnread = unreadCounts.values.reduce(0, +)
                 EventManager.shared.setUnreadCount(totalUnread)
             }
-            EventManager.shared.triggerEvent(.messageReceived, title: c.displayName, content: text, contactID: c.id)
+            // A muted contact keeps its unread badge but stays silent.
+            if !c.isMuted {
+                EventManager.shared.triggerEvent(.messageReceived, title: c.displayName, content: text, contactID: c.id)
+            }
+            maybeSendAutoreply(to: c)
         }
     }
 
-    
     func onAccountStateChanged(username: String, protocolId: String, isConnected: Bool, statusMsg: String) {
         let proto = AccountProtocol.allCases.first(where: { $0.purpleProtocolID == protocolId })
         if let idx = accounts.firstIndex(where: { $0.username == username && (proto == nil || $0.accountProtocol == proto) }) {
@@ -1154,9 +1172,14 @@ public final class PurpleBridgeService {
         if !isConnected {
             // The prpl does not reliably emit chat-left on disconnect.
             // A stale entry here would block the rejoin after a reconnect.
-            let accountRooms = contacts.filter { $0.isGroupChat && $0.accountUsername == username }.map(\.handle)
-            joinedChatRooms.subtract(accountRooms)
+            joinedChatRooms[Self.chatRoomAccountKey(username, protocolId)] = nil
         }
+        // Account connectivity is a first-class event like in the classic app.
+        EventManager.shared.triggerEvent(
+            isConnected ? .accountConnected : .accountDisconnected,
+            title: username,
+            content: statusMsg
+        )
         self.connectionState = "\(username): \(statusMsg)"
     }
 
@@ -1164,7 +1187,38 @@ public final class PurpleBridgeService {
 
     // Rooms with a live libpurple conversation. Listed chats outside this
     // set need a join before messages can flow.
-    private var joinedChatRooms: Set<String> = []
+    private var joinedChatRooms: [String: Set<String>] = [:]
+
+    /// This loads the last message date of every contact from disk once.
+    /// Later messages update the map inline, so the By Activity sort has
+    /// fresh data without reading logs during rendering.
+    public func hydrateLastActivityDates() {
+        guard !lastActivityHydrated else { return }
+        lastActivityHydrated = true
+        Task { @MainActor in
+            let store = ChatLogStore.shared
+            var latestByHandle: [String: Date] = [:]
+            for (handle, msgs) in store.loadAllLogs() {
+                guard let last = msgs.map(\.timestamp).max() else { continue }
+                latestByHandle[store.sanitizeHandle(handle)] = last
+            }
+            for c in contacts {
+                if let date = latestByHandle[store.sanitizeHandle(c.handle)] {
+                    lastActivityDates[c.id] = date
+                }
+            }
+        }
+    }
+
+    /// This is the joined-rooms key of an account. libpurple identifies
+    /// accounts by (username, protocol); two accounts can share a room name.
+    nonisolated static func chatRoomAccountKey(_ username: String, _ protocolId: String?) -> String {
+        "\(username):\(protocolId ?? "")"
+    }
+
+    func isChatJoined(username: String, protocolId: String?, roomName: String) -> Bool {
+        joinedChatRooms[Self.chatRoomAccountKey(username, protocolId)]?.contains(roomName) ?? false
+    }
 
     /// The server replays recent history on every join. A stored message
     /// with the same time, direction, and text is the same message.
@@ -1268,7 +1322,7 @@ public final class PurpleBridgeService {
 
     func onChatUnlisted(roomName: String, username: String, protocolId: String) {
         // A joined chat stays open even when the plugin drops the list entry.
-        guard !joinedChatRooms.contains(roomName) else { return }
+        guard !isChatJoined(username: username, protocolId: protocolId, roomName: roomName) else { return }
         let before = contacts.count
         contacts.removeAll(where: {
             $0.isGroupChat && $0.handle == roomName
@@ -1280,8 +1334,8 @@ public final class PurpleBridgeService {
     }
 
     func onChatJoined(roomName: String, username: String, protocolId: String) {
-        joinedChatRooms.insert(roomName)
         let proto = AccountProtocol.allCases.first(where: { $0.purpleProtocolID == protocolId })
+        joinedChatRooms[Self.chatRoomAccountKey(username, protocolId), default: []].insert(roomName)
         // libpurple can normalize the room name.
         // The code reconciles the contact handle to the libpurple room name.
         // This routes incoming chat messages back to the contact.
@@ -1291,7 +1345,11 @@ public final class PurpleBridgeService {
         }) {
             contacts[idx].handle = roomName
             saveContactsToDefaults()
-        } else if !contacts.contains(where: { $0.isGroupChat && $0.handle == roomName }) {
+        } else if !contacts.contains(where: {
+            $0.isGroupChat && $0.handle == roomName
+                && ($0.accountUsername == nil || $0.accountUsername == username)
+                && (proto == nil || $0.accountProtocol == proto)
+        }) {
             let newContact = Contact(
                 name: roomName,
                 handle: roomName,
@@ -1312,7 +1370,7 @@ public final class PurpleBridgeService {
         // leaveGroupChat() removes the local contact when the user leaves.
         // This fires for the libpurple side or when the server kicks the user.
         // There is no UI for kicks yet.
-        joinedChatRooms.remove(roomName)
+        joinedChatRooms[Self.chatRoomAccountKey(username, protocolId)]?.remove(roomName)
     }
 
     /// Map a raw protocol sender id to a display name. Teams system events
@@ -1337,8 +1395,67 @@ public final class PurpleBridgeService {
         return sender
     }
 
-    func onChatMessage(roomName: String, sender: String, text: String, isFromMe: Bool, timestamp: Int64 = 0, isSystem: Bool = false) {
-        guard let c = contacts.first(where: { $0.isGroupChat && $0.handle == roomName }) else { return }
+    /// True when a group message mentions one of the local accounts.
+    /// The match uses the full username and its local part, so a short or
+    /// common name can produce false positives. Three characters minimum.
+    nonisolated static func isGroupMention(text: String, accounts: [Account]) -> Bool {
+        let lowered = text.lowercased()
+        for account in accounts {
+            var candidates = [account.username.lowercased()]
+            if let at = account.username.firstIndex(of: "@") {
+                candidates.append(String(account.username[..<at]).lowercased())
+            }
+            for candidate in candidates where candidate.count >= 3 && lowered.contains(candidate) {
+                return true
+            }
+        }
+        return false
+    }
+
+    // MARK: - Away Autoreply
+
+    private var autoreplySentAt: [UUID: Date] = [:]
+    /// One reply per contact per cooldown: protocols echo and retry.
+    private let autoreplyCooldown: TimeInterval = 300
+
+    /// This answers an incoming IM with a notice while the user is away.
+    /// Group chats, system events, and repeats inside the cooldown stay
+    /// silent. Disabled by default (AdiumAutoreplyEnabled).
+    func maybeSendAutoreply(to contact: Contact) {
+        guard UserDefaults.standard.object(forKey: "AdiumAutoreplyEnabled") as? Bool == true,
+              myStatus == .away,
+              !contact.isGroupChat,
+              !contact.isBlocked else { return }
+
+        let now = Date()
+        if let last = autoreplySentAt[contact.id], now.timeIntervalSince(last) < autoreplyCooldown {
+            return
+        }
+        autoreplySentAt[contact.id] = now
+        sendMessage(t("I am away right now."), to: contact)
+    }
+
+    /// This toggles notification suppression for one conversation.
+    /// The unread badge still counts; only sounds and notifications stop.
+    public func setMuted(_ muted: Bool, for contactID: UUID) {
+        guard let idx = contacts.firstIndex(where: { $0.id == contactID }) else { return }
+        contacts[idx].isMuted = muted
+        saveContactsToDefaults()
+    }
+
+    func onChatMessage(roomName: String, username: String, protocolId: String, sender: String, text: String, isFromMe: Bool, timestamp: Int64 = 0, isSystem: Bool = false) {
+        let proto = AccountProtocol.allCases.first(where: { $0.purpleProtocolID == protocolId })
+        var c = contacts.first(where: {
+            $0.isGroupChat && $0.handle == roomName
+                && $0.accountUsername == username
+                && (proto == nil || $0.accountProtocol == proto)
+        })
+        if c == nil {
+            // Legacy path: a plugin without an account or a contact that
+            // predates per-account rooms still matches by room name alone.
+            c = contacts.first(where: { $0.isGroupChat && $0.handle == roomName })
+        }
+        guard let c else { return }
         if !isFromMe && c.isBlocked { return }
 
         let senderName = isFromMe ? "Me" : (sender.isEmpty ? c.displayName : sender)
@@ -1359,6 +1476,7 @@ public final class PurpleBridgeService {
         }
         msgs.append(newMsg)
         messagesPerContact[c.id] = msgs
+        lastActivityDates[c.id] = msgDate
 
         if let updatedMsgs = messagesPerContact[c.id] {
             ChatLogStore.shared.saveMessages(updatedMsgs, for: c.handle)
@@ -1370,7 +1488,12 @@ public final class PurpleBridgeService {
                 let totalUnread = unreadCounts.values.reduce(0, +)
                 EventManager.shared.setUnreadCount(totalUnread)
             }
-            EventManager.shared.triggerEvent(.messageReceived, title: c.displayName, content: "\(senderName): \(text)", contactID: c.id)
+            let eventType: AdiumEventType =
+                (!isSystem && Self.isGroupMention(text: text, accounts: accounts)) ? .groupMention : .messageReceived
+            // A muted room keeps its unread badge but stays silent.
+            if !c.isMuted {
+                EventManager.shared.triggerEvent(eventType, title: c.displayName, content: "\(senderName): \(text)", contactID: c.id)
+            }
         }
     }
 
@@ -1654,14 +1777,16 @@ public final class PurpleBridgeService {
         }
     }
 
-    private static let handleChatMessageCallback: adium_purple_on_chat_message_cb = { roomName, sender, messageText, isFromMe, isSystem, timestamp in
+    private static let handleChatMessageCallback: adium_purple_on_chat_message_cb = { roomName, accountUsername, protocolId, sender, messageText, isFromMe, isSystem, timestamp in
         guard let roomName = roomName, let messageText = messageText else { return }
         let rStr = String(cString: roomName)
+        let uStr = accountUsername != nil ? String(cString: accountUsername!) : ""
+        let pStr = protocolId != nil ? String(cString: protocolId!) : ""
         let sStr = sender != nil ? String(cString: sender!) : ""
         let mStr = String(cString: messageText)
 
         DispatchQueue.main.async {
-            PurpleBridgeService.shared.onChatMessage(roomName: rStr, sender: sStr, text: mStr, isFromMe: isFromMe, timestamp: timestamp, isSystem: isSystem)
+            PurpleBridgeService.shared.onChatMessage(roomName: rStr, username: uStr, protocolId: pStr, sender: sStr, text: mStr, isFromMe: isFromMe, timestamp: timestamp, isSystem: isSystem)
         }
     }
 

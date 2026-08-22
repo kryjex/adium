@@ -37,7 +37,7 @@ typedef void (*adium_purple_on_xfer_destroyed_cb)(void* xfer_handle);
 // Group chat (MUC) callback signatures
 typedef void (*adium_purple_on_chat_joined_cb)(const char* room_name, const char* username, const char* protocol_id);
 typedef void (*adium_purple_on_chat_left_cb)(const char* room_name, const char* username, const char* protocol_id);
-typedef void (*adium_purple_on_chat_message_cb)(const char* room_name, const char* sender, const char* message_text, bool is_from_me, bool is_system, long long timestamp);
+typedef void (*adium_purple_on_chat_message_cb)(const char* room_name, const char* account_username, const char* protocol_id, const char* sender, const char* message_text, bool is_from_me, bool is_system, long long timestamp);
 // This callback fires for every occupant of a joined chat. Existing occupants arrive with
 // new_arrival=false while the roster loads. Later arrivals have new_arrival=true.
 typedef void (*adium_purple_on_chat_buddy_joined_cb)(const char* room_name, const char* buddy_name, bool new_arrival);

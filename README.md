@@ -34,6 +34,15 @@ Adium is a free and open source instant messaging application for [OS X](https:/
 
 Adium X 0.88 up to Adium 1.4.5 are Universal applications which run natively on both PowerPC- and Intel-based Macintosh computers. Adium 1.5 and up require an Intel based computer.
 
+## Known limitations (AdiumSwift) ##
+
+This branch is the Swift rewrite of Adium on top of libpurple. It inherits
+one core constraint from libpurple: an account is identified by its
+**(username, protocol)** pair. Two accounts on the **same protocol with the
+same username** (for example two Microsoft Teams tenants signed in with the
+same email address) cannot coexist — add the second tenant from a different
+account, or run it in another client.
+
 ## Contributing ##
 * [Development information](https://web.archive.org/web/20200915230142/https://trac.adium.im/wiki/Development)  
 * [Contribute code](https://web.archive.org/web/20200923043011/https://trac.adium.im/wiki/ContributingCode)

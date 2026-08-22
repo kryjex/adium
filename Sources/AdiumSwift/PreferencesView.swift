@@ -7,6 +7,9 @@ public struct PreferencesView: View {
     @AppStorage("launchAtLogin") private var launchAtLogin: Bool = false
     @AppStorage("showOfflineContacts") private var showOfflineContacts: Bool = true
     @AppStorage(AppLanguage.defaultsKey) private var appLanguage: String = ""
+    @AppStorage("AdiumAutoAwayEnabled") private var autoAwayEnabled: Bool = true
+    @AppStorage("AdiumAutoAwayMinutes") private var autoAwayMinutes: Int = 5
+    @AppStorage("AdiumAutoreplyEnabled") private var autoreplyEnabled: Bool = false
     
     @State private var showAddAccountSheet = false
     @State private var accountToConfigure: Account? = nil
@@ -172,6 +175,22 @@ public struct PreferencesView: View {
                 Toggle(t("Show offline contacts in the list"), isOn: $showOfflineContacts)
                     .font(.system(size: 11))
                 Toggle(t("Start Adium when the Mac starts"), isOn: $launchAtLogin)
+                    .font(.system(size: 11))
+                Toggle(t("Set status to Away when inactive"), isOn: $autoAwayEnabled)
+                    .font(.system(size: 11))
+                if autoAwayEnabled {
+                    Picker(t("Away after:"), selection: $autoAwayMinutes) {
+                        ForEach([1, 5, 10, 15, 30], id: \.self) { minutes in
+                            Text(t("\(minutes) min")).tag(minutes)
+                        }
+                    }
+                    .font(.system(size: 11))
+                    .frame(maxWidth: 280, alignment: .leading)
+                }
+
+                Divider()
+
+                Toggle(t("Answer with an away notice when someone writes to you"), isOn: $autoreplyEnabled)
                     .font(.system(size: 11))
 
                 Divider()

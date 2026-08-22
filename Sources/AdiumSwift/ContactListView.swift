@@ -6,6 +6,7 @@ public struct ContactListView: View {
     @Bindable var bridge = PurpleBridgeService.shared
     @AppStorage("showOfflineContacts") private var showOfflineContacts: Bool = true
     @AppStorage("contactSortOrder") private var sortOrderRaw: String = ContactSortOrder.name.rawValue
+    @AppStorage("contactGroupingMode") private var groupingRaw: String = ContactGroupingMode.manual.rawValue
     
     @State private var searchText = ""
     @State private var showAddAccountSheet = false
@@ -15,6 +16,7 @@ public struct ContactListView: View {
     @State private var contactToCombine: Contact? = nil
     @State private var isEditingStatusMessage = false
     @State private var statusMessageDraft = ""
+    @State private var collapsedDerivedSections: Set<String> = []
     @FocusState private var isSearchFocused: Bool
     @FocusState private var isStatusMessageFocused: Bool
     
@@ -22,6 +24,10 @@ public struct ContactListView: View {
     
     var sortOrder: ContactSortOrder {
         ContactSortOrder(rawValue: sortOrderRaw) ?? .name
+    }
+
+    var groupingMode: ContactGroupingMode {
+        ContactGroupingMode(rawValue: groupingRaw) ?? .manual
     }
     
     public init(selectedContactID: Binding<UUID?> = .constant(nil)) {
@@ -47,6 +53,7 @@ public struct ContactListView: View {
         let items: [DisplayItem]
         let onlineCount: Int
         let totalCount: Int
+        let isExpanded: Bool
     }
     
     enum DisplayItem: Identifiable {
@@ -73,7 +80,41 @@ public struct ContactListView: View {
         return matchesSearch && matchesStatus
     }
 
+    private var hasActiveFilters: Bool {
+        !searchText.isEmpty || !showOfflineContacts
+    }
+
     var groupSections: [GroupSectionData] {
+        switch groupingMode {
+        case .manual:
+            return manualGroupSections()
+        case .provider, .account:
+            return derivedGroupSections()
+        }
+    }
+
+    /// This sorts display items with the active sort order.
+    private func sortedDisplayItems(_ items: [DisplayItem]) -> [DisplayItem] {
+        items.sorted { item1, item2 in
+            switch (item1, item2) {
+            case (.contact(let c1), .contact(let c2)):
+                return compareContacts(c1, c2, order: sortOrder)
+            case (.contact(let c1), .metacontact(let m2, let sc2)):
+                let c2 = sc2.first ?? Contact(name: m2.name, handle: "", status: .offline)
+                return compareContacts(c1, c2, order: sortOrder)
+            case (.metacontact(let m1, let sc1), .contact(let c2)):
+                let c1 = sc1.first ?? Contact(name: m1.name, handle: "", status: .offline)
+                return compareContacts(c1, c2, order: sortOrder)
+            case (.metacontact(let m1, let sc1), .metacontact(let m2, let sc2)):
+                let c1 = sc1.first ?? Contact(name: m1.name, handle: "", status: .offline)
+                let c2 = sc2.first ?? Contact(name: m2.name, handle: "", status: .offline)
+                return compareContacts(c1, c2, order: sortOrder)
+            }
+        }
+    }
+
+    /// Sections follow the user-managed groups.
+    private func manualGroupSections() -> [GroupSectionData] {
         var allGroupNames = bridge.contactGroups.map { $0.name }
         for c in bridge.contacts {
             if !allGroupNames.contains(c.group) {
@@ -92,8 +133,6 @@ public struct ContactListView: View {
             }
         }
         let allMetaMemberIDs = Set(membersByMetacontactID.values.flatMap { $0.map(\.id) })
-
-        let isFilterActive = !searchText.isEmpty || !showOfflineContacts
 
         return allGroupNames.compactMap { groupName -> GroupSectionData? in
             let groupObj = bridge.contactGroups.first(where: { $0.name == groupName }) ?? ContactGroup(name: groupName)
@@ -126,28 +165,83 @@ public struct ContactListView: View {
 
             // This hides the section when it is empty after filtering.
             // This shows the section when it is a new empty group without filters active.
-            if items.isEmpty && (isFilterActive || !groupContacts.isEmpty) {
+            if items.isEmpty && (hasActiveFilters || !groupContacts.isEmpty) {
                 return nil
             }
 
-            let sortedItems = items.sorted { item1, item2 in
-                switch (item1, item2) {
-                case (.contact(let c1), .contact(let c2)):
-                    return compareContacts(c1, c2, order: sortOrder)
-                case (.contact(let c1), .metacontact(let m2, let sc2)):
-                    let c2 = sc2.first ?? Contact(name: m2.name, handle: "", status: .offline)
-                    return compareContacts(c1, c2, order: sortOrder)
-                case (.metacontact(let m1, let sc1), .contact(let c2)):
-                    let c1 = sc1.first ?? Contact(name: m1.name, handle: "", status: .offline)
-                    return compareContacts(c1, c2, order: sortOrder)
-                case (.metacontact(let m1, let sc1), .metacontact(let m2, let sc2)):
-                    let c1 = sc1.first ?? Contact(name: m1.name, handle: "", status: .offline)
-                    let c2 = sc2.first ?? Contact(name: m2.name, handle: "", status: .offline)
-                    return compareContacts(c1, c2, order: sortOrder)
-                }
+            return GroupSectionData(group: groupObj, items: sortedDisplayItems(items), onlineCount: onlineCount, totalCount: totalCount, isExpanded: groupObj.isExpanded)
+        }
+    }
+
+    /// The section key of a contact under the derived grouping modes.
+    private func sectionKey(for c: Contact) -> String {
+        switch groupingMode {
+        case .manual:
+            return c.group
+        case .provider:
+            return c.accountProtocol.rawValue
+        case .account:
+            let owner = c.accountUsername?.isEmpty == false ? c.accountUsername! : t("Unknown Account")
+            return "\(c.accountProtocol.rawValue) · \(owner)"
+        }
+    }
+
+    /// Provider and account modes derive sections from the contacts.
+    /// A metacontact renders in the section of its primary contact.
+    private func derivedGroupSections() -> [GroupSectionData] {
+        var membersByMetacontactID: [UUID: [Contact]] = [:]
+        for c in bridge.contacts {
+            if let metaID = c.metacontactID {
+                membersByMetacontactID[metaID, default: []].append(c)
             }
-            
-            return GroupSectionData(group: groupObj, items: sortedItems, onlineCount: onlineCount, totalCount: totalCount)
+        }
+        let allMetaMemberIDs = Set(membersByMetacontactID.values.flatMap { $0.map(\.id) })
+
+        var order: [String] = []
+        var itemsByKey: [String: [DisplayItem]] = [:]
+        var statsByKey: [String: (online: Int, total: Int)] = [:]
+        func ensureKey(_ key: String) {
+            if itemsByKey[key] == nil {
+                itemsByKey[key] = []
+                order.append(key)
+            }
+        }
+
+        for meta in bridge.metacontacts {
+            guard let members = membersByMetacontactID[meta.id], !members.isEmpty,
+                  let primary = primaryContact(for: meta, in: members) else { continue }
+            let subContacts = members.filter(contactMatchesFilter)
+            guard !subContacts.isEmpty else { continue }
+            let key = sectionKey(for: primary)
+            ensureKey(key)
+            itemsByKey[key]?.append(.metacontact(meta, subContacts))
+        }
+        for c in bridge.contacts where contactMatchesFilter(c) && !allMetaMemberIDs.contains(c.id) {
+            let key = sectionKey(for: c)
+            ensureKey(key)
+            itemsByKey[key]?.append(.contact(c))
+        }
+        for c in bridge.contacts {
+            let key = sectionKey(for: c)
+            ensureKey(key)
+            let s = statsByKey[key] ?? (0, 0)
+            statsByKey[key] = (online: s.online + (c.status != .offline ? 1 : 0), total: s.total + 1)
+        }
+
+        return order.sorted { $0.localizedCaseInsensitiveCompare($1) == .orderedAscending }.compactMap { key in
+            let items = itemsByKey[key] ?? []
+            // An empty result means every contact was filtered out.
+            if items.isEmpty && hasActiveFilters {
+                return nil
+            }
+            let stats = statsByKey[key] ?? (0, 0)
+            return GroupSectionData(
+                group: ContactGroup(name: key),
+                items: sortedDisplayItems(items),
+                onlineCount: stats.online,
+                totalCount: stats.total,
+                isExpanded: !collapsedDerivedSections.contains(key)
+            )
         }
     }
     
@@ -158,7 +252,7 @@ public struct ContactListView: View {
         return members.first
     }
 
-    private func compareContacts(_ c1: Contact, _ c2: Contact, order: ContactSortOrder) -> Bool {
+    func compareContacts(_ c1: Contact, _ c2: Contact, order: ContactSortOrder) -> Bool {
         switch order {
         case .name:
             return c1.displayName.localizedCaseInsensitiveCompare(c2.displayName) == .orderedAscending
@@ -167,9 +261,22 @@ public struct ContactListView: View {
                 return c1.status.sortPriority < c2.status.sortPriority
             }
             return c1.displayName.localizedCaseInsensitiveCompare(c2.displayName) == .orderedAscending
+        case .byActivity:
+            // Unread conversations always sort first, then by last message.
+            let unread1 = bridge.unreadCounts[c1.id, default: 0]
+            let unread2 = bridge.unreadCounts[c2.id, default: 0]
+            if unread1 != unread2 {
+                return unread1 > unread2
+            }
+            let d1 = bridge.lastActivityDates[c1.id] ?? .distantPast
+            let d2 = bridge.lastActivityDates[c2.id] ?? .distantPast
+            if d1 != d2 {
+                return d1 > d2
+            }
+            return c1.displayName.localizedCaseInsensitiveCompare(c2.displayName) == .orderedAscending
         }
     }
-    
+
     public var body: some View {
         VStack(spacing: 0) {
             HStack(spacing: 8) {
@@ -190,7 +297,7 @@ public struct ContactListView: View {
                         .foregroundColor(.primary)
                 }
                 .menuStyle(.borderlessButton)
-                
+
                 Spacer()
                 
                 Menu {
@@ -199,6 +306,12 @@ public struct ContactListView: View {
                     Picker(t("Sort Order"), selection: $sortOrderRaw) {
                         ForEach(ContactSortOrder.allCases, id: \.rawValue) { sort in
                             Text(sort.displayName).tag(sort.rawValue)
+                        }
+                    }
+                    Divider()
+                    Picker(t("Group By"), selection: $groupingRaw) {
+                        ForEach(ContactGroupingMode.allCases, id: \.rawValue) { mode in
+                            Text(mode.displayName).tag(mode.rawValue)
                         }
                     }
                 } label: {
@@ -418,10 +531,22 @@ public struct ContactListView: View {
                             group: section.group,
                             onlineCount: section.onlineCount,
                             totalCount: section.totalCount,
-                            onRename: { groupToRename = section.group.name },
-                            onDelete: { bridge.deleteGroup(name: section.group.name) }
+                            isExpanded: section.isExpanded,
+                            onToggle: {
+                                if groupingMode == .manual {
+                                    bridge.toggleGroupExpanded(name: section.group.name)
+                                } else {
+                                    if collapsedDerivedSections.contains(section.group.name) {
+                                        collapsedDerivedSections.remove(section.group.name)
+                                    } else {
+                                        collapsedDerivedSections.insert(section.group.name)
+                                    }
+                                }
+                            },
+                            onRename: groupingMode == .manual ? { groupToRename = section.group.name } : nil,
+                            onDelete: groupingMode == .manual ? { bridge.deleteGroup(name: section.group.name) } : nil
                         )) {
-                            if section.group.isExpanded {
+                            if section.isExpanded {
                                 ForEach(section.items) { item in
                                     switch item {
                                     case .contact(let contact):
@@ -447,6 +572,12 @@ public struct ContactListView: View {
                 }
                 .listStyle(.sidebar)
                 .scrollContentBackground(.hidden)
+                .task(id: sortOrderRaw) {
+                    // The By Activity order needs last message dates.
+                    if sortOrder == .byActivity {
+                        bridge.hydrateLastActivityDates()
+                    }
+                }
             }
             
             Divider()
@@ -530,26 +661,30 @@ struct GroupHeaderView: View {
     let group: ContactGroup
     let onlineCount: Int
     let totalCount: Int
-    let onRename: () -> Void
-    let onDelete: () -> Void
+    let isExpanded: Bool
+    let onToggle: () -> Void
+    // Derived sections (provider/account) have no stored group, so the
+    // rename and delete actions only exist for manual groups.
+    var onRename: (() -> Void)? = nil
+    var onDelete: (() -> Void)? = nil
     @Bindable var bridge = PurpleBridgeService.shared
-    
+
     var body: some View {
         HStack(spacing: 6) {
-            Button(action: { bridge.toggleGroupExpanded(name: group.name) }) {
-                Image(systemName: group.isExpanded ? "chevron.down" : "chevron.right")
+            Button(action: { onToggle() }) {
+                Image(systemName: isExpanded ? "chevron.down" : "chevron.right")
                     .font(.system(size: 9, weight: .bold))
                     .foregroundColor(.secondary)
             }
             .buttonStyle(.plain)
-            .accessibilityLabel(group.isExpanded ? t("Collapse group") : t("Expand group"))
-            
+            .accessibilityLabel(isExpanded ? t("Collapse group") : t("Expand group"))
+
             Text(group.name)
                 .font(.system(size: 10, weight: .bold))
                 .foregroundColor(.primary)
-            
+
             Spacer()
-            
+
             Text("\(onlineCount)/\(totalCount)")
                 .font(.system(size: 9, weight: .medium))
                 .foregroundColor(.secondary)
@@ -559,13 +694,17 @@ struct GroupHeaderView: View {
         }
         .contentShape(Rectangle())
         .contextMenu {
-            Button(t("Rename Group...")) {
-                onRename()
+            if let onRename {
+                Button(t("Rename Group...")) {
+                    onRename()
+                }
             }
-            Button(role: .destructive) {
-                onDelete()
-            } label: {
-                Label(t("Delete Group"), systemImage: "trash")
+            if let onDelete {
+                Button(role: .destructive) {
+                    onDelete()
+                } label: {
+                    Label(t("Delete Group"), systemImage: "trash")
+                }
             }
         }
     }
@@ -698,6 +837,15 @@ struct ContactRowView: View {
                         .foregroundColor(.secondary.opacity(0.8))
                         .lineLimit(1)
                 }
+
+                // With two or more accounts on one protocol the row needs
+                // to say which account owns this contact.
+                if showAccountHint {
+                    Text(contact.accountUsername ?? "")
+                        .font(.system(size: 8))
+                        .foregroundColor(.secondary.opacity(0.7))
+                        .lineLimit(1)
+                }
             }
         }
         .padding(.vertical, 2)
@@ -734,7 +882,20 @@ struct ContactRowView: View {
             Button(contact.isBlocked ? t("Unblock Contact") : t("Block Contact")) {
                 bridge.toggleBlockContact(contact.id)
             }
+
+            Divider()
+
+            Button(contact.isMuted ? t("Unmute Notifications") : t("Mute Notifications")) {
+                bridge.setMuted(!contact.isMuted, for: contact.id)
+            }
         }
+        .help(showAccountHint ? "\(contact.displayName) · \(contact.accountUsername ?? "")" : "")
+    }
+
+    /// True when another account shares this contact's protocol.
+    private var showAccountHint: Bool {
+        guard let account = contact.accountUsername, !account.isEmpty else { return false }
+        return bridge.accounts.filter { $0.accountProtocol == contact.accountProtocol }.count > 1
     }
 }
 
