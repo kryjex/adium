@@ -17,6 +17,7 @@
 "Add Account..." = "Legg til konto...";
 "Add Messaging Account" = "Legg til meldingskonto";
 "Add Participant to the Group" = "Legg til deltaker i gruppen";
+"Add Plugin…" = "Legg til programtillegg…";
 "Add new account" = "Legg til ny konto";
 "Add new account (⌘⇧A)" = "Legg til ny konto (⌘⇧A)";
 "Add participant" = "Legg til deltaker";
@@ -55,6 +56,7 @@
 "Change Icon / Avatar..." = "Endre symbol / avatar...";
 "Channel / Group Name:" = "Kanal-/gruppenavn:";
 "Chat exported successfully to %@" = "Chatten ble eksportert til %@";
+"Choose a .so plugin file" = "Velg en .so-programtilleggsfil";
 "Clear Completed" = "Fjern fullførte";
 "Clear search" = "Tøm søket";
 "Close" = "Lukk";
@@ -82,6 +84,7 @@
 "Could not encode the text as UTF-8" = "Kunne ikke kode teksten som UTF-8";
 "Could not install the plugin file." = "Kunne ikke installere plugin-filen.";
 "Could not load the plugin catalog. Check your connection and try again." = "Kunne ikke laste inn plugin-katalogen. Kontroller tilkoblingen og prøv igjen.";
+"Could not remove the plugin file." = "Kunne ikke fjerne programtilleggsfilen.";
 "Could not send message: no account found for %@" = "Kunne ikke sende melding: fant ingen konto for %@";
 "Could not send the file: no account found for %@" = "Kunne ikke sende filen: fant ingen konto for %@";
 "Could not start the call with %@" = "Kunne ikke starte samtalen med %@";
@@ -168,6 +171,7 @@
 "No transcripts match the filters." = "Ingen samtalelogger samsvarer med filtrene.";
 "OK" = "OK";
 "Offline" = "Frakoblet";
+"Only .so plugin files are supported." = "Bare .so-programtilleggsfiler støttes.";
 "Open Viewer" = "Åpne loggviser";
 "Open the Teams call inside Adium" = "Åpne Teams-samtalen i Adium";
 "Open transcript and history viewer (⌘⌥T / ⌘⇧T)" = "Åpne logg- og historikkviser (⌘⌥T / ⌘⇧T)";
@@ -245,6 +249,7 @@
 "The chat history with %@ will be deleted permanently. This action cannot be undone." = "Chatloggen med %@ slettes permanent. Denne handlingen kan ikke angres.";
 "The downloaded plugin failed the checksum check." = "Den nedlastede pluginen besto ikke sjekksumkontrollen.";
 "The plugin download failed. Check your connection and try again." = "Nedlastingen av pluginen mislyktes. Kontroller tilkoblingen og prøv igjen.";
+"The plugin file will be deleted from disk. It stays loaded until you restart Adium." = "Programtilleggsfilen slettes fra disken. Den forblir lastet til du starter Adium på nytt.";
 "This plugin has no downloadable binary yet." = "Denne pluginen har ingen nedlastbar binærfil ennå.";
 "Today" = "I dag";
 "Topic / Description (optional):" = "Emne/beskrivelse (valgfritt):";
@@ -257,6 +262,8 @@
 "Transferring..." = "Overfører...";
 "Type a message..." = "Skriv en melding...";
 "Unblock Contact" = "Opphev blokkering av kontakt";
+"Uninstall" = "Avinstaller";
+"Uninstall %@" = "Avinstaller %@";
 "Unlink Metacontact" = "Koble fra metakontakt";
 "Update" = "Oppdater";
 "Use Secure Connection (SSL/TLS)" = "Bruk sikker tilkobling (SSL/TLS)";

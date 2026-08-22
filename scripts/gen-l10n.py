@@ -1,14 +1,20 @@
 #!/usr/bin/env python3
-"""Generate Localizable.strings for every language from the JSON maps.
+"""Generate Localizable.strings and InfoPlist.strings for every language.
 
-Usage: gen-l10n.py <l10n-dir> <resources-dir>
+Usage: gen-l10n.py <l10n-dir> <resources-dir> <packaging-dir>
 The l10n dir holds one <lang>.json per language with English keys and
 translated values. The en table repeats the keys as values. Every language
 must cover exactly the key set of es.json; a mismatch stops the build.
+Keys named like an Info.plist usage description go to
+<packaging-dir>/<lang>.lproj/InfoPlist.strings instead: macOS resolves
+permission prompts before launch, so t() cannot localize them.
 """
 import json
+import re
 import sys
 from pathlib import Path
+
+INFOPLIST_RE = re.compile(r"^NS\w+UsageDescription$")
 
 
 def load_strict(path: Path) -> dict[str, str]:
@@ -47,7 +53,7 @@ def write_strings(path: Path, pairs: dict[str, str]) -> None:
 
 
 def main() -> None:
-    l10n_dir, resources = Path(sys.argv[1]), Path(sys.argv[2])
+    l10n_dir, resources, packaging = Path(sys.argv[1]), Path(sys.argv[2]), Path(sys.argv[3])
     canonical = set(load_strict(l10n_dir / "es.json"))
 
     failures = []
@@ -60,15 +66,22 @@ def main() -> None:
         if missing or extra or empty:
             failures.append(f"{lang_file.name}: missing={sorted(missing)} extra={sorted(extra)} empty={sorted(empty)}")
             continue
-        write_strings(resources / f"{lang_file.stem}.lproj/Localizable.strings", mapping)
+        ui = {k: v for k, v in mapping.items() if not INFOPLIST_RE.match(k)}
+        plist = {k: v for k, v in mapping.items() if INFOPLIST_RE.match(k)}
+        write_strings(resources / f"{lang_file.stem}.lproj/Localizable.strings", ui)
+        write_strings(packaging / f"{lang_file.stem}.lproj/InfoPlist.strings", plist)
 
-    write_strings(resources / "en.lproj/Localizable.strings", {k: k for k in canonical})
+    en_ui = {k: k for k in canonical if not INFOPLIST_RE.match(k)}
+    write_strings(resources / "en.lproj/Localizable.strings", en_ui)
+    # No en.lproj/InfoPlist.strings: the plist values themselves are the
+    # English base, and macOS falls back to them when no lproj matches.
 
     if failures:
         print("Key set mismatches against es.json:")
         print("\n".join(failures))
         sys.exit(1)
-    print(f"Wrote {len(canonical)} keys for en + {[f.stem for f in languages]}")
+    print(f"Wrote {len(canonical)} keys for en + {[f.stem for f in languages]}; "
+          f"InfoPlist.strings in {packaging}")
 
 
 if __name__ == "__main__":

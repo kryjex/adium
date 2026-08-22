@@ -268,5 +268,15 @@
   "Installed Plugins": "Installerade plugins",
   "Available Plugins": "Tillgängliga plugins",
   "Today": "Idag",
-  "Yesterday": "Igår"
+  "Yesterday": "Igår",
+  "Add Plugin…": "Lägg till insticksmodul…",
+  "Uninstall": "Avinstallera",
+  "Uninstall %@": "Avinstallera %@",
+  "Choose a .so plugin file": "Välj en .so-pluginfil",
+  "Only .so plugin files are supported.": "Endast .so-pluginfiler stöds.",
+  "Could not remove the plugin file.": "Kunde inte ta bort pluginfilen.",
+  "The plugin file will be deleted from disk. It stays loaded until you restart Adium.": "Pluginfilen raderas från disken. Den förblir inläst tills du startar om Adium.",
+  "NSCameraUsageDescription": "Adium använder kameran för videosamtal.",
+  "NSMicrophoneUsageDescription": "Adium använder mikrofonen för samtal.",
+  "NSContactsUsageDescription": "Adium använder dina macOS-kontakter för att matcha chattkontakter med deras uppgifter."
 }

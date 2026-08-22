@@ -17,6 +17,7 @@
 "Add Account..." = "Add Account...";
 "Add Messaging Account" = "Add Messaging Account";
 "Add Participant to the Group" = "Add Participant to the Group";
+"Add Plugin…" = "Add Plugin…";
 "Add new account" = "Add new account";
 "Add new account (⌘⇧A)" = "Add new account (⌘⇧A)";
 "Add participant" = "Add participant";
@@ -55,6 +56,7 @@
 "Change Icon / Avatar..." = "Change Icon / Avatar...";
 "Channel / Group Name:" = "Channel / Group Name:";
 "Chat exported successfully to %@" = "Chat exported successfully to %@";
+"Choose a .so plugin file" = "Choose a .so plugin file";
 "Clear Completed" = "Clear Completed";
 "Clear search" = "Clear search";
 "Close" = "Close";
@@ -82,6 +84,7 @@
 "Could not encode the text as UTF-8" = "Could not encode the text as UTF-8";
 "Could not install the plugin file." = "Could not install the plugin file.";
 "Could not load the plugin catalog. Check your connection and try again." = "Could not load the plugin catalog. Check your connection and try again.";
+"Could not remove the plugin file." = "Could not remove the plugin file.";
 "Could not send message: no account found for %@" = "Could not send message: no account found for %@";
 "Could not send the file: no account found for %@" = "Could not send the file: no account found for %@";
 "Could not start the call with %@" = "Could not start the call with %@";
@@ -168,6 +171,7 @@
 "No transcripts match the filters." = "No transcripts match the filters.";
 "OK" = "OK";
 "Offline" = "Offline";
+"Only .so plugin files are supported." = "Only .so plugin files are supported.";
 "Open Viewer" = "Open Viewer";
 "Open the Teams call inside Adium" = "Open the Teams call inside Adium";
 "Open transcript and history viewer (⌘⌥T / ⌘⇧T)" = "Open transcript and history viewer (⌘⌥T / ⌘⇧T)";
@@ -245,6 +249,7 @@
 "The chat history with %@ will be deleted permanently. This action cannot be undone." = "The chat history with %@ will be deleted permanently. This action cannot be undone.";
 "The downloaded plugin failed the checksum check." = "The downloaded plugin failed the checksum check.";
 "The plugin download failed. Check your connection and try again." = "The plugin download failed. Check your connection and try again.";
+"The plugin file will be deleted from disk. It stays loaded until you restart Adium." = "The plugin file will be deleted from disk. It stays loaded until you restart Adium.";
 "This plugin has no downloadable binary yet." = "This plugin has no downloadable binary yet.";
 "Today" = "Today";
 "Topic / Description (optional):" = "Topic / Description (optional):";
@@ -257,6 +262,8 @@
 "Transferring..." = "Transferring...";
 "Type a message..." = "Type a message...";
 "Unblock Contact" = "Unblock Contact";
+"Uninstall" = "Uninstall";
+"Uninstall %@" = "Uninstall %@";
 "Unlink Metacontact" = "Unlink Metacontact";
 "Update" = "Update";
 "Use Secure Connection (SSL/TLS)" = "Use Secure Connection (SSL/TLS)";

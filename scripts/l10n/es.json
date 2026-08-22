@@ -268,5 +268,15 @@
   "Installed Plugins": "Plugins instalados",
   "Available Plugins": "Plugins disponibles",
   "Today": "Hoy",
-  "Yesterday": "Ayer"
+  "Yesterday": "Ayer",
+  "Add Plugin…": "Añadir plugin…",
+  "Uninstall": "Eliminar",
+  "Uninstall %@": "Eliminar %@",
+  "Choose a .so plugin file": "Elige un archivo de plugin .so",
+  "Only .so plugin files are supported.": "Solo se admiten archivos de plugin .so.",
+  "Could not remove the plugin file.": "No se pudo eliminar el archivo del plugin.",
+  "The plugin file will be deleted from disk. It stays loaded until you restart Adium.": "El archivo del plugin se borrará del disco. Permanece cargado hasta que reinicies Adium.",
+  "NSCameraUsageDescription": "Adium usa la cámara para las videollamadas.",
+  "NSMicrophoneUsageDescription": "Adium usa el micrófono para las llamadas.",
+  "NSContactsUsageDescription": "Adium usa los contactos de macOS para asociar tus contactos de chat con sus datos."
 }

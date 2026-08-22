@@ -17,6 +17,7 @@
 "Add Account..." = "Añadir Cuenta...";
 "Add Messaging Account" = "Añadir Cuenta de Mensajería";
 "Add Participant to the Group" = "Añadir Participante al Grupo";
+"Add Plugin…" = "Añadir plugin…";
 "Add new account" = "Añadir nueva cuenta";
 "Add new account (⌘⇧A)" = "Añadir nueva cuenta (⌘⇧A)";
 "Add participant" = "Añadir participante";
@@ -55,6 +56,7 @@
 "Change Icon / Avatar..." = "Cambiar Icono / Avatar...";
 "Channel / Group Name:" = "Nombre del Canal / Grupo:";
 "Chat exported successfully to %@" = "Chat exportado exitosamente a %@";
+"Choose a .so plugin file" = "Elige un archivo de plugin .so";
 "Clear Completed" = "Limpiar Completadas";
 "Clear search" = "Borrar búsqueda";
 "Close" = "Cerrar";
@@ -82,6 +84,7 @@
 "Could not encode the text as UTF-8" = "No se pudo codificar el texto en UTF-8";
 "Could not install the plugin file." = "No se pudo instalar el archivo del plugin.";
 "Could not load the plugin catalog. Check your connection and try again." = "No se pudo cargar el catálogo de plugins. Comprueba tu conexión e inténtalo de nuevo.";
+"Could not remove the plugin file." = "No se pudo eliminar el archivo del plugin.";
 "Could not send message: no account found for %@" = "No se pudo enviar mensaje: no se encontró una cuenta para %@";
 "Could not send the file: no account found for %@" = "No se pudo enviar el archivo: no se encontró una cuenta para %@";
 "Could not start the call with %@" = "No se pudo iniciar la llamada con %@";
@@ -168,6 +171,7 @@
 "No transcripts match the filters." = "No se encontraron transcripciones que coincidan con los filtros.";
 "OK" = "OK";
 "Offline" = "Desconectado";
+"Only .so plugin files are supported." = "Solo se admiten archivos de plugin .so.";
 "Open Viewer" = "Abrir Visor";
 "Open the Teams call inside Adium" = "Abrir la llamada de Teams dentro de Adium";
 "Open transcript and history viewer (⌘⌥T / ⌘⇧T)" = "Abrir visor de transcripciones e historial (⌘⌥T / ⌘⇧T)";
@@ -245,6 +249,7 @@
 "The chat history with %@ will be deleted permanently. This action cannot be undone." = "Se eliminará permanentemente el historial de chat con %@. Esta acción no se puede deshacer.";
 "The downloaded plugin failed the checksum check." = "El plugin descargado no superó la verificación de checksum.";
 "The plugin download failed. Check your connection and try again." = "La descarga del plugin falló. Comprueba tu conexión e inténtalo de nuevo.";
+"The plugin file will be deleted from disk. It stays loaded until you restart Adium." = "El archivo del plugin se borrará del disco. Permanece cargado hasta que reinicies Adium.";
 "This plugin has no downloadable binary yet." = "Este plugin todavía no tiene un binario descargable.";
 "Today" = "Hoy";
 "Topic / Description (optional):" = "Tema / Descripción (opcional):";
@@ -257,6 +262,8 @@
 "Transferring..." = "Transfiriendo...";
 "Type a message..." = "Escribe un mensaje...";
 "Unblock Contact" = "Desbloquear Contacto";
+"Uninstall" = "Eliminar";
+"Uninstall %@" = "Eliminar %@";
 "Unlink Metacontact" = "Desvincular Metacontacto";
 "Update" = "Actualizar";
 "Use Secure Connection (SSL/TLS)" = "Usar Conexión Segura (SSL/TLS)";

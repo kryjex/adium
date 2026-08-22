@@ -94,4 +94,45 @@ struct PluginManagerTests {
         #expect(PluginManager.sha256Matches(data: data, expectedHex: correctHex.uppercased()))
         #expect(!PluginManager.sha256Matches(data: data, expectedHex: wrongHex))
     }
+
+    @Test("refreshInstalled marks only user-directory plugins as uninstallable")
+    @MainActor
+    func testInstalledOriginFlags() {
+        let manager = PluginManager.shared
+        let original = manager.installed
+        defer { manager.installed = original }
+
+        let home = NSHomeDirectory()
+        let userPath = home + "/.adium-swift/plugins/libuser-test.so"
+        let purplePath = home + "/.purple/plugins/libpidgin-test.so"
+
+        manager.refreshInstalled(discoveredPaths: [userPath, purplePath])
+
+        #expect(manager.installed.count == 2)
+        for plugin in manager.installed {
+            // Neither path is inside the app bundle.
+            #expect(!plugin.isBundled)
+            if plugin.path == userPath {
+                #expect(plugin.canUninstall)
+            } else {
+                // ~/.purple/plugins is external: loadable but not removable.
+                #expect(!plugin.canUninstall)
+            }
+        }
+    }
+
+    @Test("installLocalPlugin rejects non-.so files before touching the disk")
+    @MainActor
+    func testInstallLocalPluginRejectsWrongExtension() async {
+        let manager = PluginManager.shared
+        let originalError = manager.lastCatalogError
+        defer { manager.lastCatalogError = originalError }
+
+        let installed = await manager.installLocalPlugin(
+            from: URL(fileURLWithPath: "/tmp/not-a-plugin.txt")
+        )
+
+        #expect(!installed)
+        #expect(manager.lastCatalogError != nil)
+    }
 }

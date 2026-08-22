@@ -17,6 +17,7 @@
 "Add Account..." = "Lägg till konto...";
 "Add Messaging Account" = "Lägg till meddelandekonto";
 "Add Participant to the Group" = "Lägg till deltagare i gruppen";
+"Add Plugin…" = "Lägg till insticksmodul…";
 "Add new account" = "Lägg till nytt konto";
 "Add new account (⌘⇧A)" = "Lägg till nytt konto (⌘⇧A)";
 "Add participant" = "Lägg till deltagare";
@@ -55,6 +56,7 @@
 "Change Icon / Avatar..." = "Byt symbol/avatar...";
 "Channel / Group Name:" = "Kanal-/gruppnamn:";
 "Chat exported successfully to %@" = "Chatten exporterades till %@";
+"Choose a .so plugin file" = "Välj en .so-pluginfil";
 "Clear Completed" = "Rensa slutförda";
 "Clear search" = "Rensa sökning";
 "Close" = "Stäng";
@@ -82,6 +84,7 @@
 "Could not encode the text as UTF-8" = "Kunde inte koda texten som UTF-8";
 "Could not install the plugin file." = "Kunde inte installera pluginfilen.";
 "Could not load the plugin catalog. Check your connection and try again." = "Kunde inte läsa in pluginkatalogen. Kontrollera din anslutning och försök igen.";
+"Could not remove the plugin file." = "Kunde inte ta bort pluginfilen.";
 "Could not send message: no account found for %@" = "Kunde inte skicka meddelande: inget konto hittades för %@";
 "Could not send the file: no account found for %@" = "Kunde inte skicka filen: inget konto hittades för %@";
 "Could not start the call with %@" = "Kunde inte starta samtalet med %@";
@@ -168,6 +171,7 @@
 "No transcripts match the filters." = "Inga transkript matchar filtren.";
 "OK" = "OK";
 "Offline" = "Nedkopplad";
+"Only .so plugin files are supported." = "Endast .so-pluginfiler stöds.";
 "Open Viewer" = "Öppna visare";
 "Open the Teams call inside Adium" = "Öppna Teams-samtalet i Adium";
 "Open transcript and history viewer (⌘⌥T / ⌘⇧T)" = "Öppna visare för transkript och historik (⌘⌥T / ⌘⇧T)";
@@ -245,6 +249,7 @@
 "The chat history with %@ will be deleted permanently. This action cannot be undone." = "Chatthistoriken med %@ raderas permanent. Åtgärden kan inte ångras.";
 "The downloaded plugin failed the checksum check." = "Det nedladdade pluginet klarade inte kontrollsummeverifieringen.";
 "The plugin download failed. Check your connection and try again." = "Nedladdningen av pluginet misslyckades. Kontrollera din anslutning och försök igen.";
+"The plugin file will be deleted from disk. It stays loaded until you restart Adium." = "Pluginfilen raderas från disken. Den förblir inläst tills du startar om Adium.";
 "This plugin has no downloadable binary yet." = "Det här pluginet har ingen nedladdningsbar binärfil ännu.";
 "Today" = "Idag";
 "Topic / Description (optional):" = "Ämne/beskrivning (valfritt):";
@@ -257,6 +262,8 @@
 "Transferring..." = "Överför...";
 "Type a message..." = "Skriv ett meddelande...";
 "Unblock Contact" = "Avblockera kontakt";
+"Uninstall" = "Avinstallera";
+"Uninstall %@" = "Avinstallera %@";
 "Unlink Metacontact" = "Koppla bort metakontakt";
 "Update" = "Uppdatera";
 "Use Secure Connection (SSL/TLS)" = "Använd säker anslutning (SSL/TLS)";

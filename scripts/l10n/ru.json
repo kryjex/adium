@@ -268,5 +268,15 @@
   "Installed Plugins": "Установленные плагины",
   "Available Plugins": "Доступные плагины",
   "Today": "Сегодня",
-  "Yesterday": "Вчера"
+  "Yesterday": "Вчера",
+  "Add Plugin…": "Добавить плагин…",
+  "Uninstall": "Удалить",
+  "Uninstall %@": "Удалить %@",
+  "Choose a .so plugin file": "Выберите файл плагина .so",
+  "Only .so plugin files are supported.": "Поддерживаются только файлы плагинов .so.",
+  "Could not remove the plugin file.": "Не удалось удалить файл плагина.",
+  "The plugin file will be deleted from disk. It stays loaded until you restart Adium.": "Файл плагина будет удалён с диска. Он остаётся загруженным до перезапуска Adium.",
+  "NSCameraUsageDescription": "Adium использует камеру для видеозвонков.",
+  "NSMicrophoneUsageDescription": "Adium использует микрофон для звонков.",
+  "NSContactsUsageDescription": "Adium использует контакты macOS, чтобы сопоставлять контакты чата с их данными."
 }

@@ -19,6 +19,7 @@ app: build
 	cp $(BIN_PATH)/AdiumSwift $(APP)/Contents/MacOS/AdiumSwift
 	cp -R $(BIN_PATH)/$(RESOURCE_BUNDLE) $(APP)/Contents/Resources/
 	cp Sources/AdiumSwift/Resources/AppIcon.icns $(APP)/Contents/Resources/AppIcon.icns
+	cp -R Packaging/*.lproj $(APP)/Contents/Resources/
 	codesign --force --sign - $(APP)
 	@echo "Built $(APP)"
 

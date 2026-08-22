@@ -1,5 +1,6 @@
 import SwiftUI
 import AppKit
+import UniformTypeIdentifiers
 
 /// The Plugins tab of Preferences. It lists the protocol plugins already on
 /// disk and the plugins the catalog offers, so the user can enable, disable,
@@ -10,6 +11,9 @@ public struct PluginsPreferencesTab: View {
     /// Catalog entry ids currently downloading. A row shows a spinner
     /// instead of its button while its id is in this set.
     @State private var installingIDs: Set<String> = []
+    /// The plugin row waiting for an uninstall confirmation. Non-nil also
+    /// presents the confirmation dialog.
+    @State private var pendingUninstall: PluginManager.InstalledPlugin?
 
     public init() {}
 
@@ -44,14 +48,44 @@ public struct PluginsPreferencesTab: View {
         .task {
             await pluginManager.loadCatalog()
         }
+        .confirmationDialog(
+            pendingUninstall?.name ?? "",
+            isPresented: Binding(
+                get: { pendingUninstall != nil },
+                set: { if !$0 { pendingUninstall = nil } }
+            ),
+            titleVisibility: .visible
+        ) {
+            Button(t("Uninstall"), role: .destructive) {
+                if let plugin = pendingUninstall {
+                    _ = pluginManager.uninstall(filename: plugin.id)
+                }
+                pendingUninstall = nil
+            }
+            Button(t("Cancel"), role: .cancel) {
+                pendingUninstall = nil
+            }
+        } message: {
+            Text(t("The plugin file will be deleted from disk. It stays loaded until you restart Adium."))
+        }
     }
 
     // MARK: - Installed
 
     private var installedSection: some View {
         VStack(alignment: .leading, spacing: 8) {
-            Text(t("Installed Plugins"))
-                .font(.system(size: 12, weight: .bold))
+            HStack {
+                Text(t("Installed Plugins"))
+                    .font(.system(size: 12, weight: .bold))
+                Spacer()
+                Button {
+                    addPluginPanel()
+                } label: {
+                    Label(t("Add Plugin…"), systemImage: "plus")
+                        .font(.system(size: 11))
+                }
+                .controlSize(.small)
+            }
 
             if pluginManager.installed.isEmpty {
                 Text(t("No plugins installed."))
@@ -86,6 +120,16 @@ public struct PluginsPreferencesTab: View {
                 installOrUpdateButton(title: t("Update"), entry: entry)
             }
 
+            if plugin.canUninstall {
+                Button {
+                    pendingUninstall = plugin
+                } label: {
+                    Image(systemName: "trash")
+                        .foregroundColor(.secondary)
+                }
+                .buttonStyle(.plain)
+                .accessibilityLabel(t("Uninstall \(plugin.name)"))
+            }
             Toggle(isOn: Binding(
                 get: { plugin.isEnabled },
                 set: { pluginManager.setEnabled($0, filename: plugin.id) }
@@ -101,6 +145,11 @@ public struct PluginsPreferencesTab: View {
         .contextMenu {
             Button(t("Show in Finder")) {
                 NSWorkspace.shared.activateFileViewerSelecting([URL(fileURLWithPath: plugin.path)])
+            }
+            if plugin.canUninstall {
+                Button(t("Uninstall"), role: .destructive) {
+                    pendingUninstall = plugin
+                }
             }
         }
     }
@@ -189,6 +238,25 @@ public struct PluginsPreferencesTab: View {
                 startInstall(entry)
             }
             .font(.system(size: 10))
+        }
+    }
+
+    // MARK: - Local install
+
+    /// This asks for a .so file with an open panel and hands it to the
+    /// manager, which copies it into ~/.adium-swift/plugins.
+    private func addPluginPanel() {
+        let panel = NSOpenPanel()
+        panel.canChooseFiles = true
+        panel.canChooseDirectories = false
+        panel.allowsMultipleSelection = false
+        panel.message = t("Choose a .so plugin file")
+        if let soType = UTType(filenameExtension: "so") {
+            panel.allowedContentTypes = [soType]
+        }
+        guard panel.runModal() == .OK, let url = panel.url else { return }
+        Task {
+            _ = await pluginManager.installLocalPlugin(from: url)
         }
     }
 

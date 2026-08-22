@@ -713,6 +713,19 @@ public final class PurpleBridgeService {
             }
         }
 
+        // 4. Find in the shared libpurple plugin directory (~/.purple/plugins).
+        // Other libpurple clients (Pidgin) install their plugins here.
+        let purplePluginsDir = PluginManager.purplePluginsDirectory.path
+        if fileManager.fileExists(atPath: purplePluginsDir),
+           let contents = try? fileManager.contentsOfDirectory(atPath: purplePluginsDir) {
+            for file in contents where file.hasSuffix(".so") {
+                if foundPlugins[file] == nil {
+                    let fullPath = (purplePluginsDir as NSString).appendingPathComponent(file)
+                    foundPlugins[file] = fullPath
+                }
+            }
+        }
+
         return Array(foundPlugins.values)
     }
 

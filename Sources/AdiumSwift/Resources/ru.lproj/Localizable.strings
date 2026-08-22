@@ -17,6 +17,7 @@
 "Add Account..." = "Добавить учётную запись...";
 "Add Messaging Account" = "Добавить учётную запись мессенджера";
 "Add Participant to the Group" = "Добавить участника в группу";
+"Add Plugin…" = "Добавить плагин…";
 "Add new account" = "Добавить новую учётную запись";
 "Add new account (⌘⇧A)" = "Добавить новую учётную запись (⌘⇧A)";
 "Add participant" = "Добавить участника";
@@ -55,6 +56,7 @@
 "Change Icon / Avatar..." = "Изменить значок / аватар...";
 "Channel / Group Name:" = "Название канала / группы:";
 "Chat exported successfully to %@" = "Чат успешно экспортирован в %@";
+"Choose a .so plugin file" = "Выберите файл плагина .so";
 "Clear Completed" = "Убрать завершённые";
 "Clear search" = "Очистить поиск";
 "Close" = "Закрыть";
@@ -82,6 +84,7 @@
 "Could not encode the text as UTF-8" = "Не удалось закодировать текст в UTF-8";
 "Could not install the plugin file." = "Не удалось установить файл плагина.";
 "Could not load the plugin catalog. Check your connection and try again." = "Не удалось загрузить каталог плагинов. Проверьте соединение и попробуйте ещё раз.";
+"Could not remove the plugin file." = "Не удалось удалить файл плагина.";
 "Could not send message: no account found for %@" = "Не удалось отправить сообщение: не найдена учётная запись для %@";
 "Could not send the file: no account found for %@" = "Не удалось отправить файл: не найдена учётная запись для %@";
 "Could not start the call with %@" = "Не удалось начать звонок с %@";
@@ -168,6 +171,7 @@
 "No transcripts match the filters." = "Нет журналов, соответствующих фильтрам.";
 "OK" = "OK";
 "Offline" = "Не в сети";
+"Only .so plugin files are supported." = "Поддерживаются только файлы плагинов .so.";
 "Open Viewer" = "Открыть просмотр";
 "Open the Teams call inside Adium" = "Открыть звонок Teams внутри Adium";
 "Open transcript and history viewer (⌘⌥T / ⌘⇧T)" = "Открыть просмотр журналов и истории (⌘⌥T / ⌘⇧T)";
@@ -245,6 +249,7 @@
 "The chat history with %@ will be deleted permanently. This action cannot be undone." = "История переписки с %@ будет удалена навсегда. Это действие нельзя отменить.";
 "The downloaded plugin failed the checksum check." = "Загруженный плагин не прошёл проверку контрольной суммы.";
 "The plugin download failed. Check your connection and try again." = "Не удалось загрузить плагин. Проверьте соединение и попробуйте ещё раз.";
+"The plugin file will be deleted from disk. It stays loaded until you restart Adium." = "Файл плагина будет удалён с диска. Он остаётся загруженным до перезапуска Adium.";
 "This plugin has no downloadable binary yet." = "У этого плагина ещё нет двоичного файла для загрузки.";
 "Today" = "Сегодня";
 "Topic / Description (optional):" = "Тема / описание (необязательно):";
@@ -257,6 +262,8 @@
 "Transferring..." = "Передача...";
 "Type a message..." = "Введите сообщение...";
 "Unblock Contact" = "Разблокировать контакт";
+"Uninstall" = "Удалить";
+"Uninstall %@" = "Удалить %@";
 "Unlink Metacontact" = "Разъединить метаконтакт";
 "Update" = "Обновить";
 "Use Secure Connection (SSL/TLS)" = "Использовать защищённое соединение (SSL/TLS)";

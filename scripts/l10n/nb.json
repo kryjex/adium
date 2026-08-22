@@ -268,5 +268,15 @@
   "Installed Plugins": "Installerte plugins",
   "Available Plugins": "Tilgjengelige plugins",
   "Today": "I dag",
-  "Yesterday": "I går"
+  "Yesterday": "I går",
+  "Add Plugin…": "Legg til programtillegg…",
+  "Uninstall": "Avinstaller",
+  "Uninstall %@": "Avinstaller %@",
+  "Choose a .so plugin file": "Velg en .so-programtilleggsfil",
+  "Only .so plugin files are supported.": "Bare .so-programtilleggsfiler støttes.",
+  "Could not remove the plugin file.": "Kunne ikke fjerne programtilleggsfilen.",
+  "The plugin file will be deleted from disk. It stays loaded until you restart Adium.": "Programtilleggsfilen slettes fra disken. Den forblir lastet til du starter Adium på nytt.",
+  "NSCameraUsageDescription": "Adium bruker kameraet for videosamtaler.",
+  "NSMicrophoneUsageDescription": "Adium bruker mikrofonen for samtaler.",
+  "NSContactsUsageDescription": "Adium bruker macOS-kontaktene dine til å samsvare chatkontakter med opplysningene deres."
 }

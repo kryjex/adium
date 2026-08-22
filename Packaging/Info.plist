@@ -25,9 +25,11 @@
 	<key>NSHighResolutionCapable</key>
 	<true/>
 	<key>NSCameraUsageDescription</key>
-	<string>Adium usa la cámara para las videollamadas de Microsoft Teams.</string>
+	<string>Adium uses the camera for video calls.</string>
 	<key>NSMicrophoneUsageDescription</key>
-	<string>Adium usa el micrófono para las llamadas de Microsoft Teams.</string>
+	<string>Adium uses the microphone for calls.</string>
+	<key>NSContactsUsageDescription</key>
+	<string>Adium uses your macOS contacts to match chat contacts with their details.</string>
 	<key>CFBundleLocalizations</key>
 	<array>
 		<string>en</string>

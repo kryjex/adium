@@ -74,6 +74,12 @@ public final class PluginManager {
         public var path: String
         public var isEnabled: Bool
         public var isBundled: Bool   // true when inside the app bundle (cannot be removed, only disabled)
+        /// Only plugins in the managed user directory can be uninstalled.
+        /// Bundled plugins are read-only, and ~/.purple/plugins belongs
+        /// to other libpurple clients.
+        public var canUninstall: Bool {
+            path.hasPrefix(PluginManager.userPluginsDirectory.path + "/")
+        }
         public var catalogEntryID: String?
     }
 
@@ -91,12 +97,22 @@ public final class PluginManager {
     )!
 
     /// This is ~/.adium-swift/plugins. Installed plugins land here, outside the app bundle.
-    public static var userPluginsDirectory: URL {
+    nonisolated public static var userPluginsDirectory: URL {
         let dir = FileManager.default.homeDirectoryForCurrentUser
             .appendingPathComponent(".adium-swift", isDirectory: true)
             .appendingPathComponent("plugins", isDirectory: true)
         try? FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
         return dir
+    }
+
+
+    /// This is ~/.purple/plugins. Other libpurple clients (Pidgin) install
+    /// their plugins here. AdiumSwift loads these files but never writes
+    /// to this directory.
+    nonisolated public static var purplePluginsDirectory: URL {
+        FileManager.default.homeDirectoryForCurrentUser
+            .appendingPathComponent(".purple", isDirectory: true)
+            .appendingPathComponent("plugins", isDirectory: true)
     }
 
     private let fileManager = FileManager.default
@@ -295,6 +311,71 @@ public final class PluginManager {
         paths.insert(destination.path)
         refreshInstalled(discoveredPaths: Array(paths))
 
+        return true
+    }
+
+    // MARK: - Local install / uninstall
+
+    /// This copies a local .so file into the user plugins directory, strips
+    /// the quarantine flag, and loads it live. The source file stays in place.
+    @discardableResult
+    public func installLocalPlugin(from source: URL) async -> Bool {
+        guard source.pathExtension.lowercased() == "so" else {
+            lastCatalogError = t("Only .so plugin files are supported.")
+            return false
+        }
+
+        let destination = Self.userPluginsDirectory.appendingPathComponent(source.lastPathComponent)
+        if fileManager.fileExists(atPath: destination.path) {
+            try? fileManager.removeItem(at: destination)
+        }
+        do {
+            try fileManager.copyItem(at: source, to: destination)
+        } catch {
+            lastCatalogError = t("Could not install the plugin file.")
+            return false
+        }
+
+        removeQuarantine(at: destination)
+        _ = adium_purple_load_plugin(destination.path)
+
+        var disabled = disabledFilenames()
+        disabled.remove(destination.lastPathComponent)
+        persistDisabled(disabled)
+
+        var paths = Set(installed.map { $0.path })
+        paths.insert(destination.path)
+        refreshInstalled(discoveredPaths: Array(paths))
+        return true
+    }
+
+    /// This deletes a user-installed plugin file. libpurple keeps the loaded
+    /// code mapped until relaunch, so this sets needsRestart like a disable.
+    @discardableResult
+    public func uninstall(filename: String) -> Bool {
+        guard let idx = installed.firstIndex(where: { $0.id == filename }),
+              installed[idx].canUninstall else {
+            return false
+        }
+
+        do {
+            try fileManager.removeItem(atPath: installed[idx].path)
+        } catch {
+            lastCatalogError = t("Could not remove the plugin file.")
+            return false
+        }
+
+        var versions = installedVersions()
+        versions.removeValue(forKey: filename)
+        persistInstalledVersions(versions)
+
+        var disabled = disabledFilenames()
+        disabled.remove(filename)
+        persistDisabled(disabled)
+
+        let remaining = installed.filter { $0.id != filename }.map { $0.path }
+        refreshInstalled(discoveredPaths: remaining)
+        needsRestart = true
         return true
     }
 
