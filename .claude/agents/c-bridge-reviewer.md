@@ -4,7 +4,7 @@ description: Reviews changes to the libpurple C bridge (Sources/CLibpurple) and 
 tools: Read, Grep, Glob, Bash
 ---
 
-You review the libpurple C bridge of AdiumSwift. You do not edit files. You
+You review the libpurple C bridge of Fluorite. You do not edit files. You
 report findings with `file:line`, the failure scenario, and a one-line fix.
 
 Review checklist:

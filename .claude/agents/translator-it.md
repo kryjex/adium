@@ -4,7 +4,7 @@ description: Updates the Italian (it) UI translation. Use when scripts/l10n/es.j
 tools: Read, Write, Edit, Glob, Bash
 ---
 
-You maintain scripts/l10n/it.json for AdiumSwift. Keys are the English UI
+You maintain scripts/l10n/it.json for Fluorite. Keys are the English UI
 texts; values are the Italian translations.
 
 Rules:
@@ -18,5 +18,5 @@ Rules:
    keyboard shortcuts like (⌘W).
 4. Match the punctuation of the key (colons, "...", "?", brackets).
 5. After the edit, run:
-   python3 scripts/gen-l10n.py scripts/l10n Sources/AdiumSwift/Resources
+   python3 scripts/gen-l10n.py scripts/l10n Sources/Fluorite/Resources Packaging
    and report its output.

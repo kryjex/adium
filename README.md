@@ -1,55 +1,61 @@
-[Adium](https://adium.im)
-========================
+# Fluorite
 
-[![Adiumy](https://adium.im/images/logo.png)](https://adiumx.cachefly.net/Adium_1.5.10.4.dmg)
+Fluorite is a multi-protocol instant-messaging client for macOS. It is a
+Swift 6 rewrite of [Adium](https://adium.im), built on the same underlying
+engine Adium used: the
+[libpurple](https://developer.pidgin.im/wiki/WhatIsLibpurple) protocol
+library. A SwiftUI app talks to a small C bridge, and the C bridge talks to
+libpurple and its protocol plugins.
 
-[Download Adium 1.5.10.4](https://adiumx.cachefly.net/Adium_1.5.10.4.dmg)
+## Supported services
 
-## About Adium ##
+- Microsoft Teams
+- WhatsApp
+- XMPP / Jabber
+- Matrix
+- IRC
+- Bonjour (local network, no account needed)
+- Any other libpurple protocol plugin, installed through the built-in
+  [plugin catalog](https://github.com/kryjex/adium-plugins-catalog)
 
-Adium is a free and open source instant messaging application for [OS X](https://www.apple.com/osx/), written using OS X's Cocoa API, released under the [GNU GPL](https://www.gnu.org/licenses/licenses.html#GPL) and developed by the Adium team. Based on the [libpurple](https://developer.pidgin.im/wiki/WhatIsLibpurple) protocol library, Adium can connect you to any number of messaging accounts on any combination of supported messaging services and then chat with other people using those services.
+## Features
 
-## Notable Features ##
-* Open Source, so everyone can see how Adium works and help improve it.
-* Support for a wide range of different Instant Messaging services (see the [full list](https://adium.im/help/pgs/Accounts-ListOfServices.html))
-* A delightful UI
-  * [Tabbed chat windows](https://adium.im/help/pgs/Messaging-TabbedMessaging.html)
-* Mac OS X integration
-	* [Address Book integration](https://adium.im/help/pgs/AdvancedFeatures-AddressBookIntegration.html)
-	* [WebKit Message View](https://adium.im/help/pgs/Messaging-MessageView.html):  Theme your chat windows
-* [Combined Contacts](https://adium.im/help/pgs/ContactList-CombiningContacts.html): Merge your contacts so that each one represents a person, not an account
-* A sophisticated events system (including [Growl notifications](https://adium.im/help/pgs/AdvancedFeatures-GrowlSupport.html))
-* [OTR Encryption](https://adium.im/help/pgs/AdvancedFeatures-OTREncryption.html)
-* [File Transfer](https://adium.im/help/pgs/AdvancedFeatures-FileTransfer.html)
-* [Xtras](https://adium.im/help/pgs/AdvancedFeatures-AdiumXtras.html) and many, many other customization options
-* A beautiful icon, the "Adiumy" duck
-* Translations: Adium speaks 27 different languages
+- **Multi-account routing** across every supported protocol, with combined
+  contacts, activity-based sorting, and presence.
+- **Tabbed conversations**, group chats / channels (MUC), and file transfer.
+- **Message styles**: Bubbles, Compact, or Classic Lines.
+- **Transcripts**: search, filter, and export to plain text, JSON, or HTML.
+- **Events engine**: sounds, Dock bounce, and badges per event type.
+- **Shortcuts support** (App Intents): send a message, set your status, or
+  list contacts from Shortcuts or Spotlight.
+- **Classic Adium data import**: bring over `.chatlog` XML transcripts,
+  `.AdiumEmoticonset` emoticon packs, and `.AdiumSoundset` sound sets from a
+  classic Adium install.
 
-## System requirements ##
-- **Adium 1.5 or later**: Mac OS X 10.6.8 or newer, an Apple-branded Macintosh computer
-- [Adium 1.4.5](https://adiumx.cachefly.net/Adium_1.4.5.dmg): Mac OS X 10.5.8
-- [Adium 1.3.10](https://adiumx.cachefly.net/Adium_1.3.10.dmg): Mac OS X 10.4
-- [Adium 1.0.6](https://adiumx.cachefly.net/Adium_1.0.6.dmg): Mac OS X 10.3.9
-- [Adium X 0.89.1](https://adiumx.cachefly.net/AdiumX_0.89.1.dmg): Mac OS X 10.2.x and older
+## Build and run
 
-Adium X 0.88 up to Adium 1.4.5 are Universal applications which run natively on both PowerPC- and Intel-based Macintosh computers. Adium 1.5 and up require an Intel based computer.
+```
+swift build   # compile
+swift test    # run the test suite (fast, no network)
+make app       # build build/Fluorite.app with plugins, Info.plist, and codesign
+make run       # build and open the app
+make install   # copy build/Fluorite.app to ~/Applications
+```
 
-## Known limitations (AdiumSwift) ##
+Camera and microphone features only work from the app bundle (`make app`); a
+bare `swift run` has no `Info.plist`, so macOS denies media capture.
 
-This branch is the Swift rewrite of Adium on top of libpurple. It inherits
-one core constraint from libpurple: an account is identified by its
-**(username, protocol)** pair. Two accounts on the **same protocol with the
-same username** (for example two Microsoft Teams tenants signed in with the
-same email address) cannot coexist — add the second tenant from a different
-account, or run it in another client.
+See `AGENTS.md` for the full architecture, coding conventions, and the C
+bridge safety rules — it is the source of truth for every contributor and
+coding agent working in this repository.
 
-## Contributing ##
-* [Development information](https://web.archive.org/web/20200915230142/https://trac.adium.im/wiki/Development)  
-* [Contribute code](https://web.archive.org/web/20200923043011/https://trac.adium.im/wiki/ContributingCode)
-* [User Interface Guidelines](https://web.archive.org/web/20200923043702/https://trac.adium.im/wiki/UIDesignGuidelines)
-* [Coding Style Guidelines](https://web.archive.org/web/20170306235100/https://trac.adium.im/wiki/CodingStyle)
-* [Coding Tips and Tricks](https://web.archive.org/web/20200923044150/https://trac.adium.im/wiki/DevelopmentTipsAndTricks)
+## Contributing
 
-## Adium Contact information ##
- * https://adium.im/
- * feedback@adium.im
+Protocol plugins (Teams, WhatsApp, and any other libpurple plugin) are not
+vendored in this repository. See `Plugins/PLUGIN_GUIDE.md` to write one, and
+propose it upstream in the
+[plugin catalog](https://github.com/kryjex/adium-plugins-catalog).
+
+## License
+
+GNU General Public License v2, inherited from Adium. See `License.txt`.

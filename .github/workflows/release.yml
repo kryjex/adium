@@ -1,4 +1,4 @@
-# Builds, signs, and notarizes a tagged release of Adium.app and attaches
+# Builds, signs, and notarizes a tagged release of Fluorite.app and attaches
 # the zip to the matching GitHub Release. Only runs on a tag push or a
 # manual dispatch from this repository -- never on a pull_request event,
 # so a fork's PR can never see the signing secrets below.
@@ -68,7 +68,7 @@ jobs:
           set -euo pipefail
           mkdir -p ~/private_keys
           echo -n "$APPLE_API_KEY_P8_BASE64" | base64 --decode -o ~/private_keys/AuthKey_$APPLE_API_KEY_ID.p8
-          xcrun notarytool store-credentials adium-notary \
+          xcrun notarytool store-credentials fluorite-notary \
             --key ~/private_keys/AuthKey_$APPLE_API_KEY_ID.p8 \
             --key-id "$APPLE_API_KEY_ID" \
             --issuer "$APPLE_API_ISSUER"
@@ -76,10 +76,10 @@ jobs:
       - name: Build, sign, and notarize
         env:
           DEVELOPER_ID_APP: ${{ secrets.DEVELOPER_ID_APPLICATION_IDENTITY }}
-        run: make release DEVELOPER_ID_APP="$DEVELOPER_ID_APP" NOTARY_PROFILE=adium-notary
+        run: make release DEVELOPER_ID_APP="$DEVELOPER_ID_APP" NOTARY_PROFILE=fluorite-notary
 
       - name: Upload to the GitHub Release
         uses: softprops/action-gh-release@v2
         with:
-          files: build/Adium-*.zip
+          files: build/Fluorite-*.zip
           generate_release_notes: true

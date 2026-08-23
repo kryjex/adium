@@ -1,6 +1,6 @@
 # AGENTS.md
 
-AdiumSwift is a macOS instant-messaging app. It is a Swift 6 rewrite of Adium
+Fluorite is a macOS instant-messaging app. It is a Swift 6 rewrite of Adium
 on top of libpurple. A SwiftUI app talks to a C bridge. The C bridge talks to
 libpurple and its protocol plugins (Microsoft Teams, WhatsApp, XMPP, Matrix).
 
@@ -12,15 +12,20 @@ live in `.claude/` and are optional; other tools can add their equivalents.
 ## Build and test
 
 - `swift build` — compile. `swift test` — run the test suite (fast, no network).
-- `make app` — build `build/Adium.app` with plugins, Info.plist, and codesign.
+- `make app` — build `build/Fluorite.app` with plugins, Info.plist, and codesign.
 - `make run` — build and open the app. `make install` — copy to `~/Applications`.
 - Camera and microphone features only work from the app bundle (`make app`).
   A bare `swift run` has no Info.plist, so macOS denies media capture.
-- Runtime data lives in `~/.adium-swift/` (accounts.xml, logs).
+- Runtime data lives in `~/.fluorite/` (accounts.xml, logs). A rename from
+  the app's former name, AdiumSwift, migrates `~/.adium-swift/` and
+  `~/Library/Application Support/AdiumSwift/` in place the first time the
+  renamed app launches (see `LegacyMigration.swift`); UserDefaults keys and
+  the Keychain service keep their pre-rename names on purpose, so existing
+  installs keep their saved accounts, preferences, and passwords.
 
 ## Architecture
 
-- `Sources/AdiumSwift/` — SwiftUI app. `PurpleBridgeService` (`@MainActor`,
+- `Sources/Fluorite/` — SwiftUI app. `PurpleBridgeService` (`@MainActor`,
   `@Observable`, singleton) holds all state and receives libpurple events.
 - `Sources/CLibpurple/` — C bridge over libpurple. See the C bridge rules below.
 - Protocol plugins (Teams, WhatsApp) are not vendored in this repository.
@@ -28,14 +33,14 @@ live in `.claude/` and are optional; other tools can add their equivalents.
   `PluginManager` (see below). Propose plugin changes upstream or in the
   `adium-plugins-catalog` repository; add glue code in `Sources/`.
 - `Tests/` — swift-testing (`@Suite` / `@Test` / `#expect`).
-- `Sources/AdiumSwift/TeamsCallWindow.swift` — Teams calls open the Teams web
-  client in a WKWebView. Adium does not implement WebRTC.
-- `Sources/AdiumSwift/PluginManager.swift` — enables/disables plugins and
+- `Sources/Fluorite/TeamsCallWindow.swift` — Teams calls open the Teams web
+  client in a WKWebView. Fluorite does not implement WebRTC.
+- `Sources/Fluorite/PluginManager.swift` — enables/disables plugins and
   installs them from the curated catalog. The canonical catalog lives in the
   sibling repository `adium-plugins-catalog` (plugins.json + CI that builds
   the .so binaries); the app bundles a fallback copy at
-  `Sources/AdiumSwift/Resources/plugins-catalog.json`. Keep both in sync.
-  User-installed plugins land in `~/.adium-swift/plugins/`.
+  `Sources/Fluorite/Resources/plugins-catalog.json`. Keep both in sync.
+  User-installed plugins land in `~/.fluorite/plugins/`.
 
 ## Conventions
 
@@ -48,20 +53,21 @@ Do not narrate what the next line does.
 ### i18n (required)
 
 - Every user-facing string goes through `t("English text")`
-  (`Sources/AdiumSwift/Localization.swift`). The key is the English text.
+  (`Sources/Fluorite/Localization.swift`). The key is the English text.
 - Translations live in `scripts/l10n/<lang>.json`, one file per language
   (es, de, sv, nb, it, fr, ru). `es.json` defines the canonical key set.
   Regenerate the tables with
-  `python3 scripts/gen-l10n.py scripts/l10n Sources/AdiumSwift/Resources`.
+  `python3 scripts/gen-l10n.py scripts/l10n Sources/Fluorite/Resources Packaging`.
   Do not edit the generated `Localizable.strings` by hand.
 - When you add a key, update every language file. Claude Code has one
   `translator-<lang>` subagent per language in `.claude/agents/`; other
   harnesses can translate directly with the rules in those files.
 - The user can override the system language in Preferences > General.
-  The choice persists in the `AdiumLanguage` UserDefaults key and applies
-  after a restart (`AppLanguage.bundle` resolves once at launch).
+  The choice persists in the `AdiumLanguage` UserDefaults key (kept from
+  before the rename, see the runtime-data note above) and applies after a
+  restart (`AppLanguage.bundle` resolves once at launch).
 - Verify coverage with
-  `python3 scripts/check-l10n.py Sources Sources/AdiumSwift/Resources/en.lproj/Localizable.strings`.
+  `python3 scripts/check-l10n.py Sources Sources/Fluorite/Resources/en.lproj/Localizable.strings`.
 - Interpolations: `String` becomes `%@`, `Int` becomes `%lld`.
 - Never localize values at the moment they are read from or written to
   storage: enum raw values, role ids (`member`/`admin`/`owner`), UserDefaults
@@ -97,7 +103,7 @@ Code implementation lives in `.claude/`; add the equivalent for your tool
    Claude Code: the `.claude/agents/c-bridge-reviewer.md` subagent holds the
    checklist; other harnesses can apply the same checklist directly.
 3. **Check i18n before you finish.** Run
-   `python3 scripts/check-l10n.py Sources Sources/AdiumSwift/Resources/en.lproj/Localizable.strings`.
+   `python3 scripts/check-l10n.py Sources Sources/Fluorite/Resources/en.lproj/Localizable.strings`.
 
 ### C bridge rules
 

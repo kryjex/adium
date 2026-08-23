@@ -3,13 +3,13 @@
 <plist version="1.0">
 <dict>
 	<key>CFBundleName</key>
-	<string>Adium</string>
+	<string>Fluorite</string>
 	<key>CFBundleDisplayName</key>
-	<string>Adium</string>
+	<string>Fluorite</string>
 	<key>CFBundleExecutable</key>
-	<string>AdiumSwift</string>
+	<string>Fluorite</string>
 	<key>CFBundleIdentifier</key>
-	<string>im.adium.AdiumSwift</string>
+	<string>com.fluorite.app</string>
 	<key>CFBundlePackageType</key>
 	<string>APPL</string>
 	<key>CFBundleIconFile</key>
@@ -25,11 +25,11 @@
 	<key>NSHighResolutionCapable</key>
 	<true/>
 	<key>NSCameraUsageDescription</key>
-	<string>Adium uses the camera for video calls.</string>
+	<string>Fluorite uses the camera for video calls.</string>
 	<key>NSMicrophoneUsageDescription</key>
-	<string>Adium uses the microphone for calls.</string>
+	<string>Fluorite uses the microphone for calls.</string>
 	<key>NSContactsUsageDescription</key>
-	<string>Adium uses your macOS contacts to match chat contacts with their details.</string>
+	<string>Fluorite uses your macOS contacts to match chat contacts with their details.</string>
 	<key>CFBundleLocalizations</key>
 	<array>
 		<string>en</string>

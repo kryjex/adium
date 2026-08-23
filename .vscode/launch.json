@@ -5,20 +5,20 @@
             "request": "launch",
             "args": [],
             "cwd": "${workspaceFolder:adium}",
-            "name": "Debug AdiumSwift",
-            "target": "AdiumSwift",
+            "name": "Debug Fluorite",
+            "target": "Fluorite",
             "configuration": "debug",
-            "preLaunchTask": "swift: Build Debug AdiumSwift"
+            "preLaunchTask": "swift: Build Debug Fluorite"
         },
         {
             "type": "swift",
             "request": "launch",
             "args": [],
             "cwd": "${workspaceFolder:adium}",
-            "name": "Release AdiumSwift",
-            "target": "AdiumSwift",
+            "name": "Release Fluorite",
+            "target": "Fluorite",
             "configuration": "release",
-            "preLaunchTask": "swift: Build Release AdiumSwift"
+            "preLaunchTask": "swift: Build Release Fluorite"
         }
     ]
 }

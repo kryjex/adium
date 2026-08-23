@@ -69,7 +69,7 @@ let cHeaderFlags = includeFlags.flatMap { ["-I", $0] }
 let linkerSearchFlags = libFlags.flatMap { ["-L", $0] } + ["-lpurple", "-lglib-2.0", "-ljson-glib-1.0", "-lintl", "-Xlinker", "-w"]
 
 let package = Package(
-    name: "AdiumSwift",
+    name: "Fluorite",
     defaultLocalization: "en",
     platforms: [.macOS(.v14)],
     targets: [
@@ -85,15 +85,15 @@ let package = Package(
             ]
         ),
         .executableTarget(
-            name: "AdiumSwift",
+            name: "Fluorite",
             dependencies: ["CLibpurple"],
             resources: [
                 .process("Resources")
             ]
         ),
         .testTarget(
-            name: "AdiumSwiftTests",
-            dependencies: ["AdiumSwift"]
+            name: "FluoriteTests",
+            dependencies: ["Fluorite"]
         ),
     ],
     swiftLanguageModes: [.v6]

@@ -1,15 +1,15 @@
-# Plan: AdiumSwift — Estado y Deuda Post-MVP
+# Plan: Fluorite — Estado y Deuda Post-MVP
 
 Fecha de actualización: 2026-08-02 (Post-ejecución de plan MVP con agentes Gemini 3.6 Flash)
 
 ## Contexto y Estado Actual
 
-El proyecto es un paquete **SwiftPM**: ejecutable `AdiumSwift` (SwiftUI, macOS 14+, Swift 6) + target C `CLibpurple` que enlaza contra libpurple/glib de Homebrew y carga dinámicamente plugins de protocolo (`Plugins/*/*.so`).
+El proyecto es un paquete **SwiftPM**: ejecutable `Fluorite` (SwiftUI, macOS 14+, Swift 6) + target C `CLibpurple` que enlaza contra libpurple/glib de Homebrew y carga dinámicamente plugins de protocolo (`Plugins/*/*.so`).
 
 ### Status MVP: ALCANZADO (validado 2026-08-02)
 Todos los bloqueantes críticos, bugs del bridge C, seguridad con Keychain, persistencia de cuentas, historial de chats indizable, notificaciones entrantes, selección de UI sincronizada y la infraestructura de plugins (con plantilla y plugin nativo `purple-whatsapp`) se han implementado y verificado.
 - **Suite de tests:** 17/17 tests pasando limpiamente en Swift 6 strict concurrency mode.
-- **Bundle App:** `make app` compila los plugins (`make -C Plugins/*`) y genera `build/Adium.app` firmado con los `.so` empaquetados en `Contents/PlugIns/`.
+- **Bundle App:** `make app` compila los plugins (`make -C Plugins/*`) y genera `build/Fluorite.app` firmado con los `.so` empaquetados en `Contents/PlugIns/`.
 - **Validación independiente (2026-08-02):** se confirmó con un harness C contra libpurple que `libteams.so` (`prpl-eionrobb-msteams`) y `libwhatsapp.so` (`prpl-adium-whatsapp`) cargan y quedan registrados como protocolos vía el search path de `Contents/PlugIns`. Se corrigió un bug bloqueante: la UI usaba el ID `prpl-teams`, que no coincide con el ID real del plugin (`prpl-eionrobb-msteams`), por lo que las cuentas Teams jamás habrían conectado. Ojo: `libwhatsapp.so` sigue enlazado contra el **stub** (`whatsmeow_bridge_stub.c`) — simula conexión y pareo; no hay conectividad real de WhatsApp aún.
 
 ---
@@ -23,9 +23,9 @@ Se ejecutó una revisión completa del diff de paridad y se corrigieron ~30 hall
 - [x] `chat-buddy-joined`/`chat-buddy-left` están conectados pero solo loguean; falta sincronizar el roster de participantes hacia Swift. (RESUELTO 2026-08-03)
 
 ### 1. QA Manual con Cuentas Reales
-- [ ] Realizar login manual en vivo con un tenant real de Microsoft Teams (verificar flujo OAuth completo desde `build/Adium.app`).
+- [ ] Realizar login manual en vivo con un tenant real de Microsoft Teams (verificar flujo OAuth completo desde `build/Fluorite.app`).
 - [ ] Verificar conexión interactiva con servidores XMPP / Jabber reales.
-- [ ] Vincular cuenta WhatsApp real escaneando QR/código de emparejamiento desde `build/Adium.app` (ya es posible: la app usa `prpl-hehoe-whatsmeow` de purple-gowhatsapp, con whatsmeow real).
+- [ ] Vincular cuenta WhatsApp real escaneando QR/código de emparejamiento desde `build/Fluorite.app` (ya es posible: la app usa `prpl-hehoe-whatsmeow` de purple-gowhatsapp, con whatsmeow real).
 
 ### 2. Deuda de Build & Distribución
 - [x] **`Package.swift` Portabilidad:** Migrar de `unsafeFlags` con `/opt/homebrew` a `pkgConfig("purple")` o detección dinámica del prefijo Homebrew/macOS Intel (`/usr/local`). (RESUELTO 2026-08-03)
@@ -44,7 +44,7 @@ En lugar de completar el bridge Go propio, se adoptó [hoehermann/purple-gowhats
 
 ## 5. Paridad de Funcionalidades con Adium Clásico
 
-Catálogo derivado de la [documentación oficial de Adium](https://adium.im/help/pgs/AdiumDocumentation.html) (2026-08-02), contrastado con el estado real de AdiumSwift. La UI actual es mínima: lista de contactos, chat 1:1 y preferencias con alta de cuentas.
+Catálogo derivado de la [documentación oficial de Adium](https://adium.im/help/pgs/AdiumDocumentation.html) (2026-08-02), contrastado con el estado real de Fluorite. La UI actual es mínima: lista de contactos, chat 1:1 y preferencias con alta de cuentas.
 
 ### Cuentas
 - [x] Multi-cuenta y multi-protocolo (Teams Work/School, Teams Personal, WhatsApp, XMPP, más los prpl que trae libpurple: IRC, Gadu-Gadu, SIMPLE, GroupWise, Zephyr).

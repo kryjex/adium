@@ -1,15 +1,15 @@
-# Adium Protocol Plugin Development Guide
+# Fluorite Protocol Plugin Development Guide
 
-This guide explains how to author libpurple 2 protocol plugins for Adium (AdiumSwift). Adium uses libpurple as its underlying messaging engine and dynamically discovers and loads protocol plugins (`.so` shared libraries) at runtime.
+This guide explains how to author libpurple 2 protocol plugins for Fluorite. Fluorite uses libpurple as its underlying messaging engine and dynamically discovers and loads protocol plugins (`.so` shared libraries) at runtime.
 
 ---
 
 ## 1. Architecture & Plugin Lifecycle
 
-Adium interacts with libpurple through the Swift-C bridge (`CLibpurple` & `PurpleBridgeService`). When libpurple is initialized:
+Fluorite interacts with libpurple through the Swift-C bridge (`CLibpurple` & `PurpleBridgeService`). When libpurple is initialized:
 
 1. **Discovery**: `PurpleBridgeService` scans:
-   - `Adium.app/Contents/PlugIns/*.so` (when running inside the macOS Application Bundle)
+   - `Fluorite.app/Contents/PlugIns/*.so` (when running inside the macOS Application Bundle)
    - `Plugins/*/*.so` (during development in the workspace)
 2. **Loading**: Each discovered plugin is loaded via `adium_purple_load_plugin` (`purple_plugins_load`).
 3. **Registration**: The plugin executes its `PURPLE_INIT_PLUGIN` macro, registering a `PurplePluginInfo` and `PurplePluginProtocolInfo` structure under a unique protocol ID (e.g., `prpl-hehoe-whatsmeow`, `prpl-eionrobb-msteams`).
@@ -48,7 +48,7 @@ Your plugin must populate a `PurplePluginProtocolInfo` struct with function poin
 
 | Callback | Function Signature | Description |
 |---|---|---|
-| `list_icon` | `const char *(*list_icon)(PurpleAccount *acct, PurpleBuddy *buddy)` | Returns the icon name (e.g., `"whatsapp"`). Used by Adium to find icon assets. |
+| `list_icon` | `const char *(*list_icon)(PurpleAccount *acct, PurpleBuddy *buddy)` | Returns the icon name (e.g., `"whatsapp"`). Used by Fluorite to find icon assets. |
 | `status_types` | `GList *(*status_types)(PurpleAccount *acct)` | Returns a `GList` of supported `PurpleStatusType` pointers (Available, Away, Offline, etc.). |
 | `login` | `void (*login)(PurpleAccount *acct)` | Triggered when an account connects. Allocate protocol account struct, initialize network connection. |
 | `close` | `void (*close)(PurpleConnection *pc)` | Triggered on disconnect. Terminate session, cancel timers, free memory. |
@@ -168,7 +168,7 @@ Place PNG icon assets matching `list_icon`'s return string in 3 resolution subdi
 
 ## 7. Connecting Custom Protocols in Swift
 
-To make your custom protocol selectable in the Adium UI, add a case to `AccountProtocol` in `Sources/AdiumSwift/Models.swift`:
+To make your custom protocol selectable in the Fluorite UI, add a case to `AccountProtocol` in `Sources/Fluorite/Models.swift`:
 
 ```swift
 public enum AccountProtocol: String, Codable, CaseIterable {
@@ -182,4 +182,4 @@ public enum AccountProtocol: String, Codable, CaseIterable {
 }
 ```
 
-Once built, placing `libyourprotocol.so` in `Plugins/yourprotocol/` will allow `make app` to automatically package it into `Adium.app/Contents/PlugIns/` and load it dynamically on launch.
+Once built, placing `libyourprotocol.so` in `Plugins/yourprotocol/` will allow `make app` to automatically package it into `Fluorite.app/Contents/PlugIns/` and load it dynamically on launch.

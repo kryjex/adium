@@ -1,0 +1,24 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+	<!-- Fluorite is not sandboxed: libpurple loads arbitrary protocol plugins
+	     from ~/.fluorite/plugins at runtime (see PluginManager), which
+	     the App Sandbox does not allow. -->
+
+	<!-- Third-party protocol plugins (Teams, WhatsApp, Matrix) come from
+	     the plugins catalog and are not signed by this app's Team ID.
+	     Hardened runtime blocks dlopen of differently-signed code without
+	     this entitlement. The plugins bundled at build time (Contents/PlugIns)
+	     are signed by our own Developer ID and would load without it. -->
+	<key>com.apple.security.cs.disable-library-validation</key>
+	<true/>
+
+	<key>com.apple.security.device.camera</key>
+	<true/>
+	<key>com.apple.security.device.audio-input</key>
+	<true/>
+	<key>com.apple.security.personal-information.addressbook</key>
+	<true/>
+</dict>
+</plist>

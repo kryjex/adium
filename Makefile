@@ -1,11 +1,11 @@
 CONFIGURATION?=release
 BUILD_DIR=build
-APP=$(BUILD_DIR)/Adium.app
+APP=$(BUILD_DIR)/Fluorite.app
 BIN_PATH=$(shell swift build -c $(CONFIGURATION) --show-bin-path)
-RESOURCE_BUNDLE=AdiumSwift_AdiumSwift.bundle
+RESOURCE_BUNDLE=Fluorite_Fluorite.bundle
 FRAMEWORKS_DIR=$(APP)/Contents/Frameworks
 PLUGINS_DIR=$(APP)/Contents/PlugIns
-ENTITLEMENTS=Packaging/Adium.entitlements
+ENTITLEMENTS=Packaging/Fluorite.entitlements
 
 # libpurple's built-in plugins to bundle for a self-contained release, plus
 # the generic core utilities. Deliberately excludes protocols outside
@@ -20,7 +20,7 @@ BUNDLED_PLUGINS=libxmpp.so ssl.so libsimple.so autoaccept.so buddynote.so \
 # Set on the command line for `sign`/`notarize`/`release`, e.g.:
 #   make release DEVELOPER_ID_APP="Developer ID Application: NAME (TEAMID)"
 DEVELOPER_ID_APP?=
-NOTARY_PROFILE?=adium-notary
+NOTARY_PROFILE?=fluorite-notary
 
 .PHONY: all build app bundle-dylibs sign notarize release run install clean
 
@@ -34,9 +34,9 @@ app: build
 	mkdir -p $(APP)/Contents/MacOS $(APP)/Contents/Resources $(APP)/Contents/PlugIns
 	cp Packaging/Info.plist $(APP)/Contents/Info.plist
 	printf 'APPL????' > $(APP)/Contents/PkgInfo
-	cp $(BIN_PATH)/AdiumSwift $(APP)/Contents/MacOS/AdiumSwift
+	cp $(BIN_PATH)/Fluorite $(APP)/Contents/MacOS/Fluorite
 	cp -R $(BIN_PATH)/$(RESOURCE_BUNDLE) $(APP)/Contents/Resources/
-	cp Sources/AdiumSwift/Resources/AppIcon.icns $(APP)/Contents/Resources/AppIcon.icns
+	cp Sources/Fluorite/Resources/AppIcon.icns $(APP)/Contents/Resources/AppIcon.icns
 	cp -R Packaging/*.lproj $(APP)/Contents/Resources/
 	codesign --force --sign - $(APP)
 	@echo "Built $(APP)"
@@ -55,7 +55,7 @@ bundle-dylibs: app
 	@test -d "$(HOMEBREW_PURPLE_PLUGINS_DIR)" || { \
 		echo "libpurple plugin dir not found at $(HOMEBREW_PURPLE_PLUGINS_DIR). Is pidgin installed via Homebrew?"; exit 1; }
 	dylibbundler -od -b -ns \
-		-x $(APP)/Contents/MacOS/AdiumSwift \
+		-x $(APP)/Contents/MacOS/Fluorite \
 		-d $(FRAMEWORKS_DIR) \
 		-p @executable_path/../Frameworks/
 	for plugin in $(BUNDLED_PLUGINS); do \
@@ -69,11 +69,11 @@ bundle-dylibs: app
 	@# dylibbundler duplicates the app's existing LC_RPATH entries instead
 	@# of replacing them; dyld refuses to launch a binary with duplicate
 	@# LC_RPATH values, so collapse back down to exactly one.
-	@while [ "$$(otool -l $(APP)/Contents/MacOS/AdiumSwift | grep -c 'cmd LC_RPATH')" -gt 1 ]; do \
-		install_name_tool -delete_rpath "@executable_path/../Frameworks/" $(APP)/Contents/MacOS/AdiumSwift; \
+	@while [ "$$(otool -l $(APP)/Contents/MacOS/Fluorite | grep -c 'cmd LC_RPATH')" -gt 1 ]; do \
+		install_name_tool -delete_rpath "@executable_path/../Frameworks/" $(APP)/Contents/MacOS/Fluorite; \
 	done
-	@if [ "$$(otool -l $(APP)/Contents/MacOS/AdiumSwift | grep -c 'cmd LC_RPATH')" -eq 0 ]; then \
-		install_name_tool -add_rpath "@executable_path/../Frameworks/" $(APP)/Contents/MacOS/AdiumSwift; \
+	@if [ "$$(otool -l $(APP)/Contents/MacOS/Fluorite | grep -c 'cmd LC_RPATH')" -eq 0 ]; then \
+		install_name_tool -add_rpath "@executable_path/../Frameworks/" $(APP)/Contents/MacOS/Fluorite; \
 	fi
 	codesign --force --deep --sign - $(APP)
 	@echo "Vendored dylibs and plugins into $(APP)"
@@ -103,10 +103,10 @@ sign: bundle-dylibs
 #   xcrun notarytool store-credentials $(NOTARY_PROFILE) \
 #     --apple-id you@example.com --team-id TEAMID --password APP_SPECIFIC_PASSWORD
 notarize: sign
-	ditto -c -k --keepParent $(APP) $(BUILD_DIR)/Adium-notarize.zip
-	xcrun notarytool submit $(BUILD_DIR)/Adium-notarize.zip \
+	ditto -c -k --keepParent $(APP) $(BUILD_DIR)/Fluorite-notarize.zip
+	xcrun notarytool submit $(BUILD_DIR)/Fluorite-notarize.zip \
 		--keychain-profile "$(NOTARY_PROFILE)" --wait
-	rm -f $(BUILD_DIR)/Adium-notarize.zip
+	rm -f $(BUILD_DIR)/Fluorite-notarize.zip
 	xcrun stapler staple $(APP)
 	spctl --assess --type execute --verbose $(APP)
 	@echo "Notarized $(APP)"
@@ -114,15 +114,15 @@ notarize: sign
 # Builds the distributable zip for a GitHub release.
 release: notarize
 	$(eval VERSION := $(shell /usr/libexec/PlistBuddy -c "Print CFBundleShortVersionString" $(APP)/Contents/Info.plist))
-	ditto -c -k --keepParent $(APP) $(BUILD_DIR)/Adium-$(VERSION).zip
-	@echo "Built $(BUILD_DIR)/Adium-$(VERSION).zip"
+	ditto -c -k --keepParent $(APP) $(BUILD_DIR)/Fluorite-$(VERSION).zip
+	@echo "Built $(BUILD_DIR)/Fluorite-$(VERSION).zip"
 
 run: app
 	open $(APP)
 
 install: app
 	mkdir -p ~/Applications
-	rm -rf ~/Applications/Adium.app
+	rm -rf ~/Applications/Fluorite.app
 	cp -R $(APP) ~/Applications/
 
 clean:
