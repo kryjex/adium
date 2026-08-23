@@ -867,18 +867,14 @@ public final class PurpleBridgeService {
     
     @discardableResult
     public func joinGroupChat(channelName: String, account: Account, topic: String? = nil) -> Contact {
-        let trimmedName = channelName.trimmingCharacters(in: .whitespacesAndNewlines)
-        if let existing = contacts.first(where: { $0.isGroupChat && $0.name.caseInsensitiveCompare(trimmedName) == .orderedSame && $0.accountProtocol == account.accountProtocol }) {
-            openTab(for: existing.id)
-            return existing
+        var trimmedName = channelName.trimmingCharacters(in: .whitespacesAndNewlines)
+        // IRC rooms are channels: prpl-irc needs the # or & prefix.
+        if account.accountProtocol == .irc,
+           !trimmedName.hasPrefix("#"), !trimmedName.hasPrefix("&") {
+            trimmedName = "#" + trimmedName
         }
-        
-        let selfParticipant = GroupParticipant(
-            name: account.username,
-            handle: account.username,
-            status: .available,
-            role: "owner"
-        )
+
+        let selfParticipant = GroupParticipant(name: "Me", handle: account.username, status: .available)
 
         let groupContact = Contact(
             name: trimmedName,

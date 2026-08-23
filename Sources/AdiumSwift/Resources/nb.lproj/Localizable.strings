@@ -2,6 +2,7 @@
 "%@ • Contact: %@" = "%@ • Kontakt: %@";
 "%lld chats" = "%lld chatter";
 "%lld combined accounts (%@)" = "%lld kombinerte kontoer (%@)";
+"%lld custom shortcuts" = "%lld egne snarveier";
 "%lld items" = "%lld objekter";
 "%lld min" = "%lld min";
 "%lld percent" = "%lld prosent";
@@ -15,6 +16,7 @@
 "Accounts" = "Kontoer";
 "Accounts:" = "Kontoer:";
 "Active (%@)" = "Aktiv (%@)";
+"Active sound set: %@" = "Aktiv lydpakke: %@";
 "Add" = "Legg til";
 "Add Account" = "Legg til konto";
 "Add Account..." = "Legg til konto...";
@@ -50,7 +52,9 @@
 "Backup restored successfully from %@" = "Sikkerhetskopien ble gjenopprettet fra %@";
 "Block Contact" = "Blokker kontakt";
 "Blocked" = "Blokkert";
+"Bonjour finds contacts on your local network. No password or server is needed." = "Bonjour finner kontakter i det lokale nettverket ditt. Verken passord eller tjener er nødvendig.";
 "Bounce Dock icon" = "Få Dock-symbolet til å sprette";
+"Bubbles" = "Bobler";
 "Busy" = "Opptatt";
 "By Account" = "Etter Konto";
 "By Activity" = "Etter Aktivitet";
@@ -64,7 +68,11 @@
 "Change Icon / Avatar..." = "Endre symbol / avatar...";
 "Channel / Group Name:" = "Kanal-/gruppenavn:";
 "Chat exported successfully to %@" = "Chatten ble eksportert til %@";
+"Choose a .chatlog, an .xml log, or the classic Adium Logs folder" = "Velg en .chatlog, en .xml-logg eller den klassiske Adium-loggsmappen";
 "Choose a .so plugin file" = "Velg en .so-programtilleggsfil";
+"Choose a folder whose name ends in .AdiumEmoticonset" = "Velg en mappe hvis navn slutter på .AdiumEmoticonset";
+"Choose a folder whose name ends in .AdiumSoundset" = "Velg en mappe hvis navn slutter på .AdiumSoundset";
+"Classic Lines" = "Klassiske linjer";
 "Clear Completed" = "Fjern fullførte";
 "Clear search" = "Tøm søket";
 "Close" = "Lukk";
@@ -77,6 +85,7 @@
 "Combine into Metacontact" = "Slå sammen til metakontakt";
 "Combine into Metacontact..." = "Slå sammen til metakontakt...";
 "Combine with:" = "Slå sammen med:";
+"Compact" = "Kompakt";
 "Completed" = "Fullført";
 "Configure how Adium responds to system events (sounds, Dock bounce, and badges)." = "Konfigurer hvordan Adium reagerer på systemhendelser (lyder, sprett i Dock og merker).";
 "Configured Accounts" = "Konfigurerte kontoer";
@@ -92,6 +101,7 @@
 "Could not encode the text as UTF-8" = "Kunne ikke kode teksten som UTF-8";
 "Could not install the plugin file." = "Kunne ikke installere plugin-filen.";
 "Could not load the plugin catalog. Check your connection and try again." = "Kunne ikke laste inn plugin-katalogen. Kontroller tilkoblingen og prøv igjen.";
+"Could not read Emoticons.plist." = "Kunne ikke lese Emoticons.plist.";
 "Could not remove the plugin file." = "Kunne ikke fjerne programtilleggsfilen.";
 "Could not send message: no account found for %@" = "Kunne ikke sende melding: fant ingen konto for %@";
 "Could not send the file: no account found for %@" = "Kunne ikke sende filen: fant ingen konto for %@";
@@ -118,6 +128,7 @@
 "Error" = "Feil";
 "Error connecting account" = "Feil ved tilkobling av konto";
 "Error while exporting: %@" = "Feil under eksport: %@";
+"Error while importing: %@" = "Feil under import: %@";
 "Error while restoring: %@" = "Feil under gjenoppretting: %@";
 "Events" = "Hendelser";
 "Expand group" = "Utvid gruppe";
@@ -143,10 +154,14 @@
 "Group By" = "Grupper Etter";
 "Group name:" = "Gruppenavn:";
 "Groups" = "Grupper";
+"HTML (.html)" = "HTML (.html)";
 "Handle / JID / Email:" = "Handle / JID / e-post:";
 "Has disconnected" = "Har koblet fra";
 "Hide Members" = "Skjul medlemmer";
 "I am away right now." = "Jeg er borte for øyeblikket.";
+"Import Classic Logs..." = "Importer klassiske logger...";
+"Imported %lld custom shortcuts from %@." = "Importerte %lld egne snarveier fra %@.";
+"Imported logs for %@. Skipped files: %lld." = "Logger importert for %@. Hoppede over filer: %lld.";
 "Incoming" = "Innkommende";
 "Install" = "Installer";
 "Installed Plugins" = "Installerte plugins";
@@ -162,6 +177,8 @@
 "Join the video call" = "Bli med i videosamtalen";
 "Language:" = "Språk:";
 "Libpurple initialization error" = "Feil ved initialisering av libpurple";
+"Load Emoticon Pack (.AdiumEmoticonset)..." = "Last inn smileypakke (.AdiumEmoticonset)...";
+"Load Sound Set (.AdiumSoundset)..." = "Last inn lydpakke (.AdiumSoundset)...";
 "Manage Accounts" = "Administrer kontoer";
 "Me" = "Meg";
 "Meeting" = "Møte";
@@ -171,6 +188,7 @@
 "Message Received" = "Melding mottatt";
 "Message Send Error" = "Feil ved meldingssending";
 "Message Sent" = "Melding sendt";
+"Message Style:" = "Meldingsstil:";
 "Metacontact" = "Metakontakt";
 "Metacontact name:" = "Metakontaktnavn:";
 "Microsoft Teams uses OAuth2 web authentication. When you click Connect, your browser opens so you can sign in to Microsoft." = "Microsoft Teams bruker OAuth2-nettautentisering. Når du klikker på Koble til, åpnes nettleseren slik at du kan logge på Microsoft.";
@@ -178,11 +196,13 @@
 "Mute Notifications" = "Demp varsler";
 "New Conversation" = "Ny samtale";
 "New name:" = "Nytt navn:";
+"Nick:" = "Kallenavn:";
 "No Accounts Configured" = "Ingen kontoer konfigurert";
 "No accounts" = "Ingen kontoer";
 "No accounts configured." = "Ingen kontoer er konfigurert.";
 "No connected account for this contact." = "Ingen tilkoblet konto for denne kontakten.";
 "No file transfers" = "Ingen filoverføringer";
+"No messages found in the selected location." = "Ingen meldinger funnet på valgt sted.";
 "No plugins in the catalog." = "Ingen plugins i katalogen.";
 "No plugins installed." = "Ingen plugins er installert.";
 "No transcripts match the filters." = "Ingen samtalelogger samsvarer med filtrene.";
@@ -215,6 +235,7 @@
 "Reconnect disconnected accounts" = "Koble til frakoblede kontoer på nytt";
 "Reconnecting accounts..." = "Kobler til kontoer på nytt...";
 "Remove Alias" = "Fjern alias";
+"Remove Custom Emoticons" = "Fjern egne smileys";
 "Remove from Group" = "Fjern fra gruppen";
 "Rename / Set Alias..." = "Endre navn / angi alias...";
 "Rename Contact (Local Alias)" = "Endre navn på kontakt (lokalt alias)";
@@ -270,6 +291,7 @@
 "The downloaded plugin failed the checksum check." = "Den nedlastede pluginen besto ikke sjekksumkontrollen.";
 "The plugin download failed. Check your connection and try again." = "Nedlastingen av pluginen mislyktes. Kontroller tilkoblingen og prøv igjen.";
 "The plugin file will be deleted from disk. It stays loaded until you restart Adium." = "Programtilleggsfilen slettes fra disken. Den forblir lastet til du starter Adium på nytt.";
+"The selected folder is not an .AdiumEmoticonset." = "Den valgte mappen er ikke et .AdiumEmoticonset.";
 "This plugin has no downloadable binary yet." = "Denne pluginen har ingen nedlastbar binærfil ennå.";
 "Today" = "I dag";
 "Topic / Description (optional):" = "Emne/beskrivelse (valgfritt):";
@@ -288,12 +310,14 @@
 "Unlink Metacontact" = "Koble fra metakontakt";
 "Unmute Notifications" = "Aktiver varsler";
 "Update" = "Oppdater";
+"Use Default Sounds" = "Bruk standardlyder";
 "Use Secure Connection (SSL/TLS)" = "Bruk sikker tilkobling (SSL/TLS)";
 "Username / Email:" = "Brukernavn / e-post:";
 "WhatsApp uses QR code or phone pairing to link. When you click Connect, the link procedure starts." = "WhatsApp bruker QR-kode eller telefonparing for tilkobling. Når du klikker på Koble til, starter koblingsprosessen.";
 "Work" = "Jobb";
 "XMPP Resource (e.g. Adium):" = "XMPP-ressurs (f.eks. Adium):";
 "Yesterday" = "I går";
+"Your name as others see it:" = "Navnet ditt slik andre ser det:";
 "[File transfer started: %@]" = "[Filoverføring startet: %@]";
 "macOS notification" = "macOS-varsel";
 "to" = "til";

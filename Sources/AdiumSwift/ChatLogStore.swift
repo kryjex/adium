@@ -3,6 +3,7 @@ import Foundation
 public enum TranscriptExportFormat: String, CaseIterable, Identifiable, Sendable {
     case plainText = "txt"
     case json = "json"
+    case html = "html"
 
     public var id: String { self.rawValue }
     public var fileExtension: String { self.rawValue }
@@ -13,6 +14,7 @@ public enum TranscriptExportFormat: String, CaseIterable, Identifiable, Sendable
         switch self {
         case .plainText: return t("Plain Text (.txt)")
         case .json: return t("JSON (.json)")
+        case .html: return t("HTML (.html)")
         }
     }
 }
@@ -199,6 +201,13 @@ public final class ChatLogStore {
     ) throws {
         let data: Data
         switch format {
+        case .html:
+            data = Self.htmlDocument(
+                messages: messages,
+                handle: handle,
+                displayName: displayName,
+                protocolType: protocolType
+            )
         case .json:
             let encoder = JSONEncoder()
             encoder.outputFormatting = [.prettyPrinted, .sortedKeys]
@@ -226,8 +235,94 @@ public final class ChatLogStore {
             }
             data = converted
         }
-        
+
         try data.write(to: destinationURL, options: .atomic)
+    }
+
+    nonisolated static func htmlEscaped(_ text: String) -> String {
+        text.replacingOccurrences(of: "&", with: "&amp;")
+            .replacingOccurrences(of: "<", with: "&lt;")
+            .replacingOccurrences(of: ">", with: "&gt;")
+            .replacingOccurrences(of: "\"", with: "&quot;")
+    }
+
+    /// This sniffs the image data format for an inline data URI.
+    nonisolated private static func imageDataKind(_ data: Data) -> String? {
+        guard data.count > 4 else { return nil }
+        let bytes = [UInt8](data.prefix(4))
+        if bytes.elementsEqual([0x89, 0x50, 0x4E, 0x47]) { return "image/png" }
+        if bytes[0] == 0xFF && bytes[1] == 0xD8 { return "image/jpeg" }
+        if bytes.elementsEqual([0x47, 0x49, 0x46]) { return "image/gif" }
+        return nil
+    }
+
+    /// This builds a standalone HTML transcript: one style block, a day
+    /// separator per calendar day, own messages right-aligned. Images ride
+    /// along as base64 data URIs.
+    nonisolated private static func htmlDocument(
+        messages: [ChatMessage],
+        handle: String,
+        displayName: String?,
+        protocolType: AccountProtocol?
+    ) -> Data {
+        let dayFormatter = DateFormatter()
+        dayFormatter.dateStyle = .full
+        let timeFormatter = DateFormatter()
+        timeFormatter.timeStyle = .medium
+
+        var body = ""
+        var currentDay: String?
+        for msg in messages {
+            let day = dayFormatter.string(from: msg.timestamp)
+            if day != currentDay {
+                currentDay = day
+                body += "<div class=\"day\">\(htmlEscaped(day))</div>\n"
+            }
+            if msg.isSystemEvent {
+                body += "<div class=\"system\">\(htmlEscaped(msg.text)) · \(timeFormatter.string(from: msg.timestamp))</div>\n"
+                continue
+            }
+            var imageTag = ""
+            if let image = msg.imageData, let kind = imageDataKind(image) {
+                imageTag = " <img src=\"data:\(kind);base64,\(image.base64EncodedString())\" alt=\"image\" />"
+            }
+            let text = htmlEscaped(msg.text).replacingOccurrences(of: "\n", with: "<br />")
+            body += "<div class=\"msg \(msg.isFromMe ? "me" : "them")\"><span class=\"meta\">\(htmlEscaped(msg.senderName)) · \(timeFormatter.string(from: msg.timestamp))</span><div class=\"text\">\(text)\(imageTag)</div></div>\n"
+        }
+
+        let title = htmlEscaped("\(displayName ?? handle) (\(handle))")
+        let protoLine = protocolType.map { "<p id=\"proto\">\(htmlEscaped($0.rawValue))</p>" } ?? ""
+        let countLine = htmlEscaped(t("Total messages: \(messages.count)"))
+        let html = """
+        <!DOCTYPE html>
+        <html lang="en">
+        <head>
+        <meta charset="utf-8" />
+        <title>\(title)</title>
+        <style>
+        body { font-family: -apple-system, Helvetica, sans-serif; font-size: 13px; color: #1d1d1f; background: #f5f5f7; margin: 0; padding: 24px; }
+        h1 { font-size: 16px; margin: 0 0 4px; }
+        #proto, #count { color: #6e6e73; margin: 0 0 16px; font-size: 11px; }
+        .day { text-align: center; font-size: 11px; color: #6e6e73; margin: 18px 0 10px; border-bottom: 1px solid #d2d2d7; padding-bottom: 4px; }
+        .msg { max-width: 70%; margin: 6px 0; }
+        .msg.me { margin-left: auto; }
+        .meta { display: block; font-size: 10px; color: #6e6e73; margin-bottom: 2px; }
+        .msg.me .meta { text-align: right; }
+        .text { background: #e9e9eb; border-radius: 12px; padding: 8px 12px; overflow-wrap: break-word; }
+        .msg.me .text { background: #0a84ff; color: #ffffff; }
+        .system { text-align: center; color: #6e6e73; font-size: 11px; font-style: italic; margin: 8px 0; }
+        img { max-width: 280px; max-height: 280px; border-radius: 8px; display: block; margin-top: 4px; }
+        </style>
+        </head>
+        <body>
+        <h1>\(title)</h1>
+        \(protoLine)
+        <p id="count">\(countLine)</p>
+        \(body)
+        </body>
+        </html>
+        """
+        return Data(html.utf8)
     }
 }
 

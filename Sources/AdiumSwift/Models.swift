@@ -29,14 +29,18 @@ public enum AccountProtocol: String, Codable, CaseIterable, Sendable {
     case teams = "Microsoft Teams"
     case whatsapp = "WhatsApp"
     case xmpp = "XMPP / Jabber"
+    case irc = "IRC"
+    case bonjour = "Bonjour"
     case matrix = "Matrix"
     case customLibpurple = "Libpurple Plugin"
-    
+
     public var iconName: String {
         switch self {
         case .teams: return "person.2.comm.fill"
         case .whatsapp: return "message.fill"
         case .xmpp: return "bubble.left.and.bubble.right.fill"
+        case .irc: return "number.square"
+        case .bonjour: return "personalhotspot"
         case .matrix: return "network"
         case .customLibpurple: return "puzzlepiece.fill"
         }
@@ -47,6 +51,8 @@ public enum AccountProtocol: String, Codable, CaseIterable, Sendable {
         case .teams: return "prpl-eionrobb-msteams"
         case .whatsapp: return "prpl-hehoe-whatsmeow"
         case .xmpp: return "prpl-jabber"
+        case .irc: return "prpl-irc"
+        case .bonjour: return "prpl-bonjour"
         case .matrix: return "prpl-matrix"
         case .customLibpurple: return "prpl-custom"
         }
@@ -62,9 +68,26 @@ public enum AccountProtocol: String, Codable, CaseIterable, Sendable {
         guard self == .whatsapp, !trimmed.isEmpty, !trimmed.contains("@") else {
             return trimmed
         }
+
         let digits = trimmed.filter(\.isNumber)
         guard !digits.isEmpty else { return trimmed }
         return digits + "@s.whatsapp.net"
+    }
+}
+
+/// This is the visual style of chat message rows. The raw value persists
+/// in UserDefaults.
+public enum MessageTheme: String, Codable, CaseIterable {
+    case bubbles = "bubbles"
+    case compact = "compact"
+    case classic = "classic"
+
+    public var displayName: String {
+        switch self {
+        case .bubbles: return t("Bubbles")
+        case .compact: return t("Compact")
+        case .classic: return t("Classic Lines")
+        }
     }
 }
 

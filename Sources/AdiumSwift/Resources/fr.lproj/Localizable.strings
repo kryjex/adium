@@ -2,6 +2,7 @@
 "%@ • Contact: %@" = "%@ • Contact : %@";
 "%lld chats" = "%lld discussions";
 "%lld combined accounts (%@)" = "%lld comptes combinés (%@)";
+"%lld custom shortcuts" = "%lld raccourcis personnalisés";
 "%lld items" = "%lld éléments";
 "%lld min" = "%lld min";
 "%lld percent" = "%lld pour cent";
@@ -15,6 +16,7 @@
 "Accounts" = "Comptes";
 "Accounts:" = "Comptes :";
 "Active (%@)" = "Actif (%@)";
+"Active sound set: %@" = "Ensemble de sons actif : %@";
 "Add" = "Ajouter";
 "Add Account" = "Ajouter un compte";
 "Add Account..." = "Ajouter un compte...";
@@ -50,7 +52,9 @@
 "Backup restored successfully from %@" = "Sauvegarde restaurée avec succès depuis %@";
 "Block Contact" = "Bloquer le contact";
 "Blocked" = "Bloqué";
+"Bonjour finds contacts on your local network. No password or server is needed." = "Bonjour trouve les contacts sur votre réseau local. Ni mot de passe ni serveur nécessaires.";
 "Bounce Dock icon" = "Faire rebondir l'icône du Dock";
+"Bubbles" = "Bulles";
 "Busy" = "Occupé";
 "By Account" = "Par Compte";
 "By Activity" = "Par Activité";
@@ -64,7 +68,11 @@
 "Change Icon / Avatar..." = "Changer l'icône / l'avatar...";
 "Channel / Group Name:" = "Nom du canal / groupe :";
 "Chat exported successfully to %@" = "Discussion exportée avec succès vers %@";
+"Choose a .chatlog, an .xml log, or the classic Adium Logs folder" = "Choisissez un .chatlog, un journal .xml ou le dossier Logs du classique Adium";
 "Choose a .so plugin file" = "Choisissez un fichier plugin .so";
+"Choose a folder whose name ends in .AdiumEmoticonset" = "Choisissez un dossier dont le nom se termine par .AdiumEmoticonset";
+"Choose a folder whose name ends in .AdiumSoundset" = "Choisissez un dossier dont le nom se termine par .AdiumSoundset";
+"Classic Lines" = "Lignes Classiques";
 "Clear Completed" = "Effacer les transferts terminés";
 "Clear search" = "Effacer la recherche";
 "Close" = "Fermer";
@@ -77,6 +85,7 @@
 "Combine into Metacontact" = "Combiner en métacontact";
 "Combine into Metacontact..." = "Combiner en métacontact...";
 "Combine with:" = "Combiner avec :";
+"Compact" = "Compact";
 "Completed" = "Terminé";
 "Configure how Adium responds to system events (sounds, Dock bounce, and badges)." = "Configurez la réaction d'Adium aux événements du système (sons, rebond du Dock et badges).";
 "Configured Accounts" = "Comptes configurés";
@@ -92,6 +101,7 @@
 "Could not encode the text as UTF-8" = "Impossible d'encoder le texte en UTF-8";
 "Could not install the plugin file." = "Impossible d'installer le fichier du plugin.";
 "Could not load the plugin catalog. Check your connection and try again." = "Impossible de charger le catalogue de plugins. Vérifiez votre connexion et réessayez.";
+"Could not read Emoticons.plist." = "Impossible de lire Emoticons.plist.";
 "Could not remove the plugin file." = "Impossible de supprimer le fichier du plugin.";
 "Could not send message: no account found for %@" = "Impossible d'envoyer le message : aucun compte trouvé pour %@";
 "Could not send the file: no account found for %@" = "Impossible d'envoyer le fichier : aucun compte trouvé pour %@";
@@ -118,6 +128,7 @@
 "Error" = "Erreur";
 "Error connecting account" = "Erreur de connexion du compte";
 "Error while exporting: %@" = "Erreur lors de l'exportation : %@";
+"Error while importing: %@" = "Erreur lors de l'import : %@";
 "Error while restoring: %@" = "Erreur lors de la restauration : %@";
 "Events" = "Événements";
 "Expand group" = "Développer le groupe";
@@ -143,10 +154,14 @@
 "Group By" = "Grouper Par";
 "Group name:" = "Nom du groupe :";
 "Groups" = "Groupes";
+"HTML (.html)" = "HTML (.html)";
 "Handle / JID / Email:" = "Identifiant / JID / e-mail :";
 "Has disconnected" = "S'est déconnecté";
 "Hide Members" = "Masquer les membres";
 "I am away right now." = "Je suis absent pour le moment.";
+"Import Classic Logs..." = "Importer les journaux classiques...";
+"Imported %lld custom shortcuts from %@." = "%lld raccourcis personnalisés importés depuis %@.";
+"Imported logs for %@. Skipped files: %lld." = "Journaux importés pour %@. Fichiers ignorés : %lld.";
 "Incoming" = "Entrant";
 "Install" = "Installer";
 "Installed Plugins" = "Plugins installés";
@@ -162,6 +177,8 @@
 "Join the video call" = "Rejoindre l'appel vidéo";
 "Language:" = "Langue :";
 "Libpurple initialization error" = "Erreur d'initialisation de libpurple";
+"Load Emoticon Pack (.AdiumEmoticonset)..." = "Charger un pack d'émoticônes (.AdiumEmoticonset)...";
+"Load Sound Set (.AdiumSoundset)..." = "Charger un ensemble de sons (.AdiumSoundset)...";
 "Manage Accounts" = "Gérer les comptes";
 "Me" = "Moi";
 "Meeting" = "Réunion";
@@ -171,6 +188,7 @@
 "Message Received" = "Message reçu";
 "Message Send Error" = "Erreur d'envoi de message";
 "Message Sent" = "Message envoyé";
+"Message Style:" = "Style des messages :";
 "Metacontact" = "Métacontact";
 "Metacontact name:" = "Nom du métacontact :";
 "Microsoft Teams uses OAuth2 web authentication. When you click Connect, your browser opens so you can sign in to Microsoft." = "Microsoft Teams utilise l'authentification web OAuth2. Quand vous cliquez sur « Se connecter », votre navigateur s'ouvre pour vous connecter à Microsoft.";
@@ -178,11 +196,13 @@
 "Mute Notifications" = "Couper les notifications";
 "New Conversation" = "Nouvelle conversation";
 "New name:" = "Nouveau nom :";
+"Nick:" = "Pseudo :";
 "No Accounts Configured" = "Aucun compte configuré";
 "No accounts" = "Aucun compte";
 "No accounts configured." = "Aucun compte configuré.";
 "No connected account for this contact." = "Aucun compte connecté pour ce contact.";
 "No file transfers" = "Aucun transfert de fichiers";
+"No messages found in the selected location." = "Aucun message trouvé à l'emplacement sélectionné.";
 "No plugins in the catalog." = "Aucun plugin dans le catalogue.";
 "No plugins installed." = "Aucun plugin installé.";
 "No transcripts match the filters." = "Aucune transcription ne correspond aux filtres.";
@@ -215,6 +235,7 @@
 "Reconnect disconnected accounts" = "Reconnecter les comptes déconnectés";
 "Reconnecting accounts..." = "Reconnexion des comptes...";
 "Remove Alias" = "Supprimer l'alias";
+"Remove Custom Emoticons" = "Retirer les émoticônes personnalisées";
 "Remove from Group" = "Retirer du groupe";
 "Rename / Set Alias..." = "Renommer / définir un alias...";
 "Rename Contact (Local Alias)" = "Renommer le contact (alias local)";
@@ -270,6 +291,7 @@
 "The downloaded plugin failed the checksum check." = "Le plugin téléchargé a échoué à la vérification de la somme de contrôle.";
 "The plugin download failed. Check your connection and try again." = "Le téléchargement du plugin a échoué. Vérifiez votre connexion et réessayez.";
 "The plugin file will be deleted from disk. It stays loaded until you restart Adium." = "Le fichier du plugin sera supprimé du disque. Il reste chargé jusqu'au redémarrage d'Adium.";
+"The selected folder is not an .AdiumEmoticonset." = "Le dossier choisi n'est pas un .AdiumEmoticonset.";
 "This plugin has no downloadable binary yet." = "Ce plugin n'a pas encore de binaire téléchargeable.";
 "Today" = "Aujourd'hui";
 "Topic / Description (optional):" = "Sujet / description (facultatif) :";
@@ -288,12 +310,14 @@
 "Unlink Metacontact" = "Dissocier le métacontact";
 "Unmute Notifications" = "Rétablir les notifications";
 "Update" = "Mettre à jour";
+"Use Default Sounds" = "Utiliser les sons par défaut";
 "Use Secure Connection (SSL/TLS)" = "Utiliser une connexion sécurisée (SSL/TLS)";
 "Username / Email:" = "Nom d'utilisateur / e-mail :";
 "WhatsApp uses QR code or phone pairing to link. When you click Connect, the link procedure starts." = "WhatsApp utilise un code QR ou un jumelage par téléphone pour la liaison. Quand vous cliquez sur « Se connecter », la procédure de liaison démarre.";
 "Work" = "Travail";
 "XMPP Resource (e.g. Adium):" = "Ressource XMPP (ex. Adium) :";
 "Yesterday" = "Hier";
+"Your name as others see it:" = "Votre nom tel que les autres le voient :";
 "[File transfer started: %@]" = "[Transfert de fichier démarré : %@]";
 "macOS notification" = "Notification macOS";
 "to" = "à";

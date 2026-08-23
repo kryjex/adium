@@ -10,6 +10,8 @@ public struct PreferencesView: View {
     @AppStorage("AdiumAutoAwayEnabled") private var autoAwayEnabled: Bool = true
     @AppStorage("AdiumAutoAwayMinutes") private var autoAwayMinutes: Int = 5
     @AppStorage("AdiumAutoreplyEnabled") private var autoreplyEnabled: Bool = false
+    @AppStorage("messageTheme") private var messageThemeRaw: String = MessageTheme.bubbles.rawValue
+    @State private var customEmoticonCount: Int = 0
     
     @State private var showAddAccountSheet = false
     @State private var accountToConfigure: Account? = nil
@@ -195,6 +197,37 @@ public struct PreferencesView: View {
 
                 Divider()
 
+                Picker(t("Message Style:"), selection: $messageThemeRaw) {
+                    ForEach(MessageTheme.allCases, id: \.rawValue) { theme in
+                        Text(theme.displayName).tag(theme.rawValue)
+                    }
+                }
+                .font(.system(size: 11))
+                .frame(maxWidth: 280, alignment: .leading)
+
+                HStack(spacing: 10) {
+                    Button(t("Load Emoticon Pack (.AdiumEmoticonset)...")) {
+                        loadEmoticonPack()
+                    }
+                    .font(.system(size: 11))
+
+                    if hasCustomEmoticons {
+                        Button(t("Remove Custom Emoticons"), role: .destructive) {
+                            UserDefaults.standard.removeObject(forKey: "AdiumCustomEmoticons")
+                            customEmoticonCount = 0
+                        }
+                        .font(.system(size: 11))
+                    }
+
+                    if customEmoticonCount > 0 {
+                        Text(t("\(customEmoticonCount) custom shortcuts"))
+                            .font(.system(size: 10))
+                            .foregroundColor(.secondary)
+                    }
+                }
+                .task { customEmoticonCount = currentCustomEmoticons().count }
+                Divider()
+
                 Picker(t("Language:"), selection: $appLanguage) {
                     Text(t("System default")).tag("")
                     ForEach(AppLanguage.options) { option in
@@ -314,6 +347,11 @@ public struct PreferencesView: View {
                         Label(t("Open Viewer"), systemImage: "clock.arrow.circlepath")
                             .font(.system(size: 11))
                     }
+
+                    Button(action: { importClassicLogs() }) {
+                        Label(t("Import Classic Logs..."), systemImage: "tray.and.arrow.down")
+                            .font(.system(size: 11))
+                    }
                 }
                 
                 if let status = backupStatusMessage {
@@ -349,6 +387,92 @@ public struct PreferencesView: View {
                     selectedAccountID = nil
                 }
             }
+        }
+    }
+
+    // MARK: - Emoticon Packs
+
+    private var hasCustomEmoticons: Bool {
+        customEmoticonCount > 0
+    }
+
+    /// This parses an .AdiumEmoticonset folder: Emoticons.plist maps image
+    /// files to dicts of Equivalents (text shortcuts) and Name. The app
+    /// renders unicode only, so each shortcut pairs with the first emoji
+    /// found in the entry name, falling back to a smiley.
+    private func loadEmoticonPack() {
+        let panel = NSOpenPanel()
+        panel.canChooseFiles = false
+        panel.canChooseDirectories = true
+        panel.allowsMultipleSelection = false
+        panel.message = t("Choose a folder whose name ends in .AdiumEmoticonset")
+        guard panel.runModal() == .OK, let url = panel.url else { return }
+        guard url.lastPathComponent.lowercased().hasSuffix(".adiumemoticonset") else {
+            backupStatusMessage = t("The selected folder is not an .AdiumEmoticonset.")
+            return
+        }
+
+        let plistURL = url.appendingPathComponent("Emoticons.plist")
+        guard let dict = NSDictionary(contentsOf: plistURL),
+              let entries = dict["Emoticons"] as? [String: Any] else {
+            backupStatusMessage = t("Could not read Emoticons.plist.")
+            return
+        }
+
+        var custom: [String: String] = currentCustomEmoticons()
+        for (_, value) in entries {
+            guard let entry = value as? [String: Any],
+                  let equivalents = entry["Equivalents"] as? [String] else { continue }
+            let name = entry["Name"] as? String ?? ""
+            let emoji = Self.firstEmoji(in: name) ?? "🙂"
+            for shortcut in equivalents where !shortcut.isEmpty {
+                custom[shortcut] = emoji
+            }
+        }
+
+        customEmoticonCount = custom.count
+        if let data = try? JSONEncoder().encode(custom) {
+            UserDefaults.standard.set(data, forKey: "AdiumCustomEmoticons")
+            backupStatusMessage = t("Imported \(custom.count) custom shortcuts from \(url.lastPathComponent).")
+        }
+    }
+
+    private func currentCustomEmoticons() -> [String: String] {
+        guard let data = UserDefaults.standard.data(forKey: "AdiumCustomEmoticons"),
+              let custom = try? JSONDecoder().decode([String: String].self, from: data) else {
+            return [:]
+        }
+        return custom
+    }
+
+    nonisolated private static func firstEmoji(in text: String) -> String? {
+        for scalar in text.unicodeScalars where scalar.properties.isEmoji && scalar.value > 0x2000 {
+            return String(scalar)
+        }
+        return nil
+    }
+
+    /// This imports classic Adium .chatlog XML logs. The user picks a
+    /// single log, a .chatlog bundle, or the whole classic Logs folder.
+    private func importClassicLogs() {
+        let panel = NSOpenPanel()
+        panel.canChooseFiles = true
+        panel.canChooseDirectories = true
+        panel.allowsMultipleSelection = false
+        panel.message = t("Choose a .chatlog, an .xml log, or the classic Adium Logs folder")
+        guard panel.runModal() == .OK, let url = panel.url else { return }
+
+        let store = ChatLogStore.shared
+        do {
+            let summary = try ClassicLogImporter.importLogs(from: url, into: store)
+            if summary.perHandle.isEmpty {
+                backupStatusMessage = t("No messages found in the selected location.")
+            } else {
+                let handles = summary.perHandle.map { "\($0.handle) (\($0.imported))" }.joined(separator: ", ")
+                backupStatusMessage = t("Imported logs for \(handles). Skipped files: \(summary.skippedFiles).")
+            }
+        } catch {
+            backupStatusMessage = t("Error while importing: \(error.localizedDescription)")
         }
     }
 }
@@ -420,17 +544,30 @@ public struct AddAccountSheet: View {
             return t("Phone (e.g. +34600000000):")
         case .xmpp:
             return t("JID / Username:")
+        case .irc:
+            return t("Nick:")
+        case .bonjour:
+            return t("Your name as others see it:")
         default:
             return t("Username / Email:")
+        }
+    }
+
+    /// Teams and WhatsApp authenticate out of band, Bonjour needs no
+    /// password at all, and an IRC server password is optional.
+    var needsPassword: Bool {
+        switch selectedProtocol {
+        case .teams, .whatsapp, .bonjour, .irc:
+            return false
+        default:
+            return true
         }
     }
     
     var isFormValid: Bool {
         let trimmedUser = username.trimmingCharacters(in: .whitespacesAndNewlines)
         if trimmedUser.isEmpty { return false }
-        if selectedProtocol == .teams || selectedProtocol == .whatsapp {
-            return true
-        }
+        if !needsPassword { return true }
         return !password.isEmpty
     }
     
@@ -458,6 +595,17 @@ public struct AddAccountSheet: View {
                             .font(.system(size: 12))
                             .accessibilityHidden(true)
                         Text(t("Microsoft Teams uses OAuth2 web authentication. When you click Connect, your browser opens so you can sign in to Microsoft."))
+                            .font(.system(size: 10))
+                            .foregroundColor(.secondary)
+                    }
+                    .padding(.vertical, 2)
+                } else if selectedProtocol == .bonjour {
+                    HStack(alignment: .top, spacing: 6) {
+                        Image(systemName: "wifi")
+                            .foregroundColor(.accentColor)
+                            .font(.system(size: 12))
+                            .accessibilityHidden(true)
+                        Text(t("Bonjour finds contacts on your local network. No password or server is needed."))
                             .font(.system(size: 10))
                             .foregroundColor(.secondary)
                     }
@@ -513,13 +661,11 @@ public struct AddAccountSheet: View {
                     let trimmedUser = username.trimmingCharacters(in: .whitespacesAndNewlines)
                     guard !trimmedUser.isEmpty else { return }
                     let pass = (selectedProtocol == .teams || selectedProtocol == .whatsapp) ? "" : password
-                    let pInt = Int(port.trimmingCharacters(in: .whitespacesAndNewlines))
                     bridge.connectAccount(
                         username: trimmedUser,
                         protocolType: selectedProtocol,
                         password: pass,
                         server: server.isEmpty ? nil : server,
-                        port: pInt,
                         resource: resource.isEmpty ? nil : resource,
                         useSSL: useSSL
                     )
@@ -530,7 +676,7 @@ public struct AddAccountSheet: View {
             }
         }
         .padding(16)
-        .frame(width: 400, height: (selectedProtocol == .teams || selectedProtocol == .whatsapp) ? 260 : (showAdvancedOptions ? 380 : 250))
+        .frame(width: 400, height: (selectedProtocol == .teams || selectedProtocol == .whatsapp || selectedProtocol == .bonjour) ? 260 : (showAdvancedOptions ? 380 : 250))
     }
 }
 
@@ -633,21 +779,45 @@ public struct AccountOptionsSheet: View {
 
 public struct EventsPreferencesTab: View {
     @Bindable var eventManager = EventManager.shared
-    
+    @State private var soundSetName: String? = EventManager.activeSoundSetName()
+
     public init() {}
-    
+
     public var body: some View {
         ScrollView {
             VStack(alignment: .leading, spacing: 14) {
                 Text(t("Adium Events Engine"))
                     .font(.system(size: 13, weight: .bold))
-                
+
                 Text(t("Configure how Adium responds to system events (sounds, Dock bounce, and badges)."))
                     .font(.system(size: 11))
                     .foregroundColor(.secondary)
-                
+
                 Divider()
-                
+
+                HStack(spacing: 10) {
+                    Button(t("Load Sound Set (.AdiumSoundset)...")) {
+                        loadSoundSetPanel()
+                    }
+                    .font(.system(size: 11))
+
+                    if soundSetName != nil {
+                        Button(t("Use Default Sounds"), role: .destructive) {
+                            EventManager.clearSoundSet()
+                            soundSetName = nil
+                        }
+                        .font(.system(size: 11))
+                    }
+                }
+
+                if let soundSetName {
+                    Text(t("Active sound set: \(soundSetName)"))
+                        .font(.system(size: 10))
+                        .foregroundColor(.secondary)
+                }
+
+                Divider()
+
                 ForEach(AdiumEventType.allCases) { eventType in
                     if let rule = eventManager.rules[eventType] {
                         EventRuleConfigRow(rule: rule) { updatedRule in
@@ -660,8 +830,24 @@ public struct EventsPreferencesTab: View {
             .padding(16)
         }
     }
-}
 
+    /// This installs a classic .AdiumSoundset folder. Event sounds fall
+    /// back to the built-in system sounds for keys the set does not map.
+    private func loadSoundSetPanel() {
+        let panel = NSOpenPanel()
+        panel.canChooseFiles = false
+        panel.canChooseDirectories = true
+        panel.allowsMultipleSelection = false
+        panel.message = t("Choose a folder whose name ends in .AdiumSoundset")
+        guard panel.runModal() == .OK, let url = panel.url else { return }
+        do {
+            try EventManager.installSoundSet(from: url)
+            soundSetName = EventManager.activeSoundSetName()
+        } catch {
+            soundSetName = nil
+        }
+    }
+}
 struct EventRuleConfigRow: View {
     let rule: EventRule
     let onUpdate: (EventRule) -> Void
@@ -748,4 +934,3 @@ struct EventRuleConfigRow: View {
         onUpdate(updated)
     }
 }
-

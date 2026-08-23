@@ -158,9 +158,15 @@ public final class EventManager {
         
         let rule = rules[eventType] ?? EventRule(eventType: eventType)
         
-        // 1. Play sound
+        // 1. Play sound. An installed classic .AdiumSoundset overrides
+        // the built-in system sounds per event.
         if rule.playSound {
-            playSound(named: rule.soundName)
+            if let file = Self.customSoundFile(for: eventType),
+               let sound = NSSound(contentsOf: file, byReference: false) {
+                sound.play()
+            } else {
+                playSound(named: rule.soundName)
+            }
         }
         
         // 2. Bounce dock
@@ -178,6 +184,72 @@ public final class EventManager {
         if rule.showNotification {
             NotificationService.shared.notifyIncomingMessage(sender: title, content: content, playSound: rule.playSound)
         }
+    }
+
+    // MARK: - Classic Sound Sets
+
+    /// This is where installed .AdiumSoundset folders live, copied out of
+    /// the user's pick so the app survives the original moving away.
+    nonisolated public static func soundSetsRoot() -> URL {
+        let appSupport = FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask).first!
+        return appSupport.appendingPathComponent("AdiumSwift/SoundSets", isDirectory: true)
+    }
+
+    nonisolated public static func activeSoundSetName() -> String? {
+        UserDefaults.standard.string(forKey: "AdiumSoundSet")
+    }
+
+    /// This copies a .AdiumSoundset folder into the app support tree and
+    /// makes it active. Sounds.plist maps classic event names to files.
+    public static func installSoundSet(from url: URL) throws {
+        guard url.lastPathComponent.lowercased().hasSuffix(".adiumsoundset") else {
+            throw NSError(domain: "SoundSet", code: 1,
+                          userInfo: [NSLocalizedDescriptionKey: "Not an .AdiumSoundset folder"])
+        }
+        let root = soundSetsRoot()
+        try FileManager.default.createDirectory(at: root, withIntermediateDirectories: true)
+        let destination = root.appendingPathComponent(url.lastPathComponent)
+        if FileManager.default.fileExists(atPath: destination.path) {
+            try FileManager.default.removeItem(at: destination)
+        }
+        try FileManager.default.copyItem(at: url, to: destination)
+        UserDefaults.standard.set(url.lastPathComponent, forKey: "AdiumSoundSet")
+    }
+
+    public static func clearSoundSet() {
+        UserDefaults.standard.removeObject(forKey: "AdiumSoundSet")
+    }
+
+    /// This maps an app event to its classic Adium sound key.
+    nonisolated static func classicSoundKey(for eventType: AdiumEventType) -> String? {
+        switch eventType {
+        case .messageReceived, .groupMention: return "Message Received"
+        case .messageSent: return "Message Sent"
+        case .contactOnline: return "Contact Sign On"
+        case .contactOffline: return "Contact Sign Off"
+        case .transferCompleted: return "File Transfer Complete"
+        case .transferFailed: return "File Transfer Failed"
+        case .messageSendError: return "Error"
+        case .accountConnected, .accountDisconnected: return nil
+        }
+    }
+
+    nonisolated private static func customSoundFile(for eventType: AdiumEventType) -> URL? {
+        guard let name = activeSoundSetName(),
+              let key = classicSoundKey(for: eventType) else { return nil }
+        let plist = soundSetsRoot()
+            .appendingPathComponent(name, isDirectory: true)
+            .appendingPathComponent("Sounds.plist")
+        guard let dict = NSDictionary(contentsOf: plist) else { return nil }
+        let fileName: String?
+        switch dict[key] {
+        case let file as String: fileName = file
+        case let entry as [String: Any]: fileName = (entry["Sound"] ?? entry["File"]) as? String
+        default: fileName = nil
+        }
+        guard let fileName else { return nil }
+        let file = plist.deletingLastPathComponent().appendingPathComponent(fileName)
+        return FileManager.default.fileExists(atPath: file.path) ? file : nil
     }
     
     // MARK: - Event Actions

@@ -26,6 +26,17 @@ public enum RichTextFormatter {
         ":rocket:": "🚀"
     ]
 
+    /// This is the built-in map extended with the imported custom pack.
+    /// Custom shortcuts win over built-in ones.
+    public static var activeEmoticonMap: [String: String] {
+        guard let data = UserDefaults.standard.data(forKey: "AdiumCustomEmoticons"),
+              let custom = try? JSONDecoder().decode([String: String].self, from: data),
+              !custom.isEmpty else {
+            return emoticonMap
+        }
+        return emoticonMap.merging(custom) { _, custom in custom }
+    }
+
     /// Match a plausible HTML tag.
     /// This includes an opening bracket, a letter, optional attributes, and a closing bracket.
     /// This does not match generic less-than or greater-than text.
@@ -45,9 +56,10 @@ public enum RichTextFormatter {
     /// Leave substrings of ordinary text alone.
     public static func replaceEmoticons(in text: String) -> String {
         var result = text
-        let sortedKeys = emoticonMap.keys.sorted { $0.count > $1.count }
+        let activeMap = activeEmoticonMap
+        let sortedKeys = activeMap.keys.sorted { $0.count > $1.count }
         for key in sortedKeys {
-            guard let replacement = emoticonMap[key], result.contains(key) else { continue }
+            guard let replacement = activeMap[key], result.contains(key) else { continue }
             let pattern = "(?:^|(?<=\\s))" + NSRegularExpression.escapedPattern(for: key) + "(?=\\s|$)"
             guard let regex = try? NSRegularExpression(pattern: pattern, options: []) else { continue }
             let range = NSRange(location: 0, length: (result as NSString).length)

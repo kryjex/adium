@@ -371,6 +371,14 @@ struct MessageBubble: View {
     let message: ChatMessage
     var isGroupChat: Bool = false
     var contact: Contact? = nil
+    @AppStorage("messageTheme") private var themeRaw: String = MessageTheme.bubbles.rawValue
+    private var theme: MessageTheme { MessageTheme(rawValue: themeRaw) ?? .bubbles }
+
+    /// Bubbles keep the tinted rounded card; compact and classic drop it.
+    private var bubbleFill: Color {
+        guard theme == .bubbles else { return .clear }
+        return message.isFromMe ? .accentColor : Color.secondary.opacity(0.18)
+    }
 
     /// A meeting link in the text joins directly.
     private var meetingURL: URL? {
@@ -431,11 +439,21 @@ struct MessageBubble: View {
 
     private var regularBubble: some View {
         HStack {
-            if message.isFromMe { Spacer() }
+            if message.isFromMe && theme == .bubbles { Spacer() }
 
-            VStack(alignment: message.isFromMe ? .trailing : .leading, spacing: 2) {
-                if isGroupChat && !message.isFromMe,
-                   let senderName = PurpleBridgeService.shared.resolveSenderDisplayName(message.senderName, in: contact) {
+            VStack(alignment: message.isFromMe && theme == .bubbles ? .trailing : .leading, spacing: theme == .bubbles ? 2 : 1) {
+                if theme != .bubbles {
+                    HStack(spacing: 4) {
+                        Text(message.timestamp, style: .time)
+                        if isGroupChat && !message.isFromMe,
+                           let senderName = PurpleBridgeService.shared.resolveSenderDisplayName(message.senderName, in: contact) {
+                            Text(senderName).fontWeight(.semibold)
+                        }
+                    }
+                    .font(.system(size: 8))
+                    .foregroundColor(.secondary)
+                } else if isGroupChat && !message.isFromMe,
+                          let senderName = PurpleBridgeService.shared.resolveSenderDisplayName(message.senderName, in: contact) {
                     Text(senderName)
                         .font(.system(size: 9, weight: .bold))
                         .foregroundColor(.accentColor)
@@ -447,13 +465,13 @@ struct MessageBubble: View {
                 }
 
                 RichMessageView(rawText: message.text, isFromMe: message.isFromMe)
-                    .font(.system(size: 11))
-                    .foregroundColor(message.isFromMe ? .white : .primary)
-                    .padding(.horizontal, 10)
-                    .padding(.vertical, 6)
+                    .font(.system(size: theme == .compact ? 10.5 : 11))
+                    .foregroundColor(theme == .bubbles && message.isFromMe ? .white : .primary)
+                    .padding(.horizontal, theme == .bubbles ? 10 : 0)
+                    .padding(.vertical, theme == .bubbles ? 6 : 0)
                     .background(
-                        RoundedRectangle(cornerRadius: 12)
-                            .fill(message.isFromMe ? Color.accentColor : Color.secondary.opacity(0.18))
+                        RoundedRectangle(cornerRadius: theme == .classic ? 2 : 12)
+                            .fill(bubbleFill)
                     )
 
                 if let url = meetingURL {
@@ -474,12 +492,14 @@ struct MessageBubble: View {
                     .help(t("Open the Teams call inside Adium"))
                 }
 
-                Text(message.timestamp, style: .time)
-                    .font(.system(size: 8))
-                    .foregroundColor(.secondary)
+                if theme == .bubbles {
+                    Text(message.timestamp, style: .time)
+                        .font(.system(size: 8))
+                        .foregroundColor(.secondary)
+                }
             }
 
-            if !message.isFromMe { Spacer() }
+            if !message.isFromMe && theme == .bubbles { Spacer() }
         }
     }
 }

@@ -118,4 +118,26 @@ struct MultiAccountTests {
         #expect(list.compareContacts(recent, old, order: .byActivity))
         #expect(!list.compareContacts(old, recent, order: .byActivity))
     }
+
+    @Test("IRC channels get the # prefix on join")
+    @MainActor
+    func testIRCChannelNormalization() {
+        let bridge = PurpleBridgeService.shared
+        let account = Account(username: "chatter", accountProtocol: .irc)
+
+        let joined = bridge.joinGroupChat(channelName: "fase3", account: account)
+        #expect(joined.handle == "#fase3")
+        defer {
+            bridge.closeTab(joined.id)
+            bridge.contacts.removeAll(where: { $0.handle == "#fase3" })
+        }
+
+        // An explicit prefix passes through unchanged.
+        let explicit = bridge.joinGroupChat(channelName: "&local", account: account)
+        #expect(explicit.handle == "&local")
+        defer {
+            bridge.closeTab(explicit.id)
+            bridge.contacts.removeAll(where: { $0.handle == "&local" })
+        }
+    }
 }
