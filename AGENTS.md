@@ -23,6 +23,28 @@ live in `.claude/` and are optional; other tools can add their equivalents.
   the Keychain service keep their pre-rename names on purpose, so existing
   installs keep their saved accounts, preferences, and passwords.
 
+### Identifiers that keep the old `Adium`/`adium-swift` name on purpose
+
+These identifiers predate the rename. Do not "fix" them; each one breaks a
+saved user install if you change it.
+
+- UserDefaults keys (for example `AdiumLanguage`) — renaming loses every
+  user's saved preference.
+- The Keychain service `com.adiumswift.keychain` — renaming orphans every
+  saved account password.
+- The `LegacyMigration.swift` paths `~/.adium-swift/` and
+  `~/Library/Application Support/AdiumSwift/` — these are read-only sources
+  for the one-time migration into `~/.fluorite/`.
+- The libpurple UI id `"adium-swift"` passed to `purple_core_init` and
+  `purple_account_set_enabled` — this is the per-UI `enabled` flag stored in
+  `~/.fluorite/accounts.xml`; changing it disables every saved account.
+- The `.AdiumEmoticonset` / `.AdiumSoundset` pack formats — users type and
+  see these exact file extensions.
+- The `adiumx.com` chatlog XML namespace — required to parse classic and
+  current chat logs.
+- The `prpl-adium-whatsapp` protocol id — the WhatsApp plugin registers
+  under this id; changing it disconnects every saved WhatsApp account.
+
 ## Architecture
 
 - `Sources/Fluorite/` — SwiftUI app. `PurpleBridgeService` (`@MainActor`,
