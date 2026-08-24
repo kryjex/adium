@@ -14,7 +14,19 @@ public extension Notification.Name {
 struct FluoriteApp: App {
     @Bindable var bridge = PurpleBridgeService.shared
     @State private var selectedContactID: UUID?
-    
+
+    /// The bundled gem silhouette, same shape as the app icon. macOS tints
+    /// a template image for the current menu bar appearance (light/dark,
+    /// selected). Falls back to a system symbol if the resource is missing.
+    private static let menuBarIcon: Image = {
+        guard let url = Bundle.module.url(forResource: "MenuBarIcon", withExtension: "png"),
+              let nsImage = NSImage(contentsOf: url) else {
+            return Image(systemName: "diamond.fill")
+        }
+        nsImage.isTemplate = true
+        return Image(nsImage: nsImage)
+    }()
+
     init() {
         // Move data left at the app's former paths (see LegacyMigration)
         // before anything else reads disk or UserDefaults.
@@ -67,7 +79,7 @@ struct FluoriteApp: App {
             // The unread total rides on the menu bar icon, like the
             // classic dock badge.
             HStack(spacing: 2) {
-                Image(systemName: "diamond.fill")
+                Self.menuBarIcon
                 if bridge.unreadCounts.values.reduce(0, +) > 0 {
                     Text("\(bridge.unreadCounts.values.reduce(0, +))")
                 }
