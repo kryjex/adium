@@ -75,7 +75,7 @@ public final class MacOSContactsService {
         return nil
     }
 
-    /// This links an Adium Contact with the macOS address book. This adds the name and profile avatar.
+    /// This links a Fluorite contact with the macOS address book. This adds the name and profile avatar.
     /// This does not overwrite a local alias.
     /// This does not replace an existing avatar.
     public func linkContact(_ contact: Contact) -> Contact {
@@ -100,7 +100,7 @@ public final class MacOSContactsService {
         return updated
     }
     
-    /// This links all Adium contacts with the macOS address book.
+    /// This links all Fluorite contacts with the macOS address book.
     public func autoLinkAllContacts() async {
         let hasAccess = await requestAccess()
         guard hasAccess else { return }

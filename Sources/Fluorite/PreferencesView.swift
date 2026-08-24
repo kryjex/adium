@@ -172,11 +172,11 @@ public struct PreferencesView: View {
             VStack(alignment: .leading, spacing: 12) {
                 Toggle(t("Show a notification when a message arrives"), isOn: $showNotifications)
                     .font(.system(size: 11))
-                Toggle(t("Play the classic Adium sound when a message arrives"), isOn: $playSoundEffects)
+                Toggle(t("Play a sound when a message arrives"), isOn: $playSoundEffects)
                     .font(.system(size: 11))
                 Toggle(t("Show offline contacts in the list"), isOn: $showOfflineContacts)
                     .font(.system(size: 11))
-                Toggle(t("Start Adium when the Mac starts"), isOn: $launchAtLogin)
+                Toggle(t("Start Fluorite when the Mac starts"), isOn: $launchAtLogin)
                     .font(.system(size: 11))
                 Toggle(t("Set status to Away when inactive"), isOn: $autoAwayEnabled)
                     .font(.system(size: 11))
@@ -237,7 +237,7 @@ public struct PreferencesView: View {
                 .font(.system(size: 11))
                 .frame(maxWidth: 280, alignment: .leading)
 
-                Text(t("Restart Adium to apply the language change."))
+                Text(t("Restart Fluorite to apply the language change."))
                     .font(.system(size: 9))
                     .foregroundColor(.secondary)
 
@@ -265,7 +265,7 @@ public struct PreferencesView: View {
                 Text(t("Backup & Data"))
                     .font(.system(size: 13, weight: .bold))
                 
-                Text(t("Export or restore the complete Adium configuration, accounts, contact list, and chat history (without plaintext passwords)."))
+                Text(t("Export or restore the complete Fluorite configuration, accounts, contact list, and chat history (without plaintext passwords)."))
                     .font(.system(size: 11))
                     .foregroundColor(.secondary)
                 
@@ -630,7 +630,7 @@ public struct AddAccountSheet: View {
                             .font(.system(size: 11))
                         TextField(t("Port (e.g. 5222):"), text: $port)
                             .font(.system(size: 11))
-                        TextField(t("XMPP Resource (e.g. Adium):"), text: $resource)
+                        TextField(t("XMPP Resource (e.g. Fluorite):"), text: $resource)
                             .font(.system(size: 11))
                         Toggle(t("Use Secure Connection (SSL/TLS)"), isOn: $useSSL)
                             .font(.system(size: 11))
@@ -786,10 +786,10 @@ public struct EventsPreferencesTab: View {
     public var body: some View {
         ScrollView {
             VStack(alignment: .leading, spacing: 14) {
-                Text(t("Adium Events Engine"))
+                Text(t("Fluorite Events Engine"))
                     .font(.system(size: 13, weight: .bold))
 
-                Text(t("Configure how Adium responds to system events (sounds, Dock bounce, and badges)."))
+                Text(t("Configure how Fluorite responds to system events (sounds, Dock bounce, and badges)."))
                     .font(.system(size: 11))
                     .foregroundColor(.secondary)
 

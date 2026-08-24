@@ -21,7 +21,7 @@ public struct PluginsPreferencesTab: View {
         ScrollView {
             VStack(alignment: .leading, spacing: 14) {
                 if pluginManager.needsRestart {
-                    Text(t("Restart Adium to apply plugin changes."))
+                    Text(t("Restart Fluorite to apply plugin changes."))
                         .font(.system(size: 9))
                         .foregroundColor(.secondary)
                 }
@@ -66,7 +66,7 @@ public struct PluginsPreferencesTab: View {
                 pendingUninstall = nil
             }
         } message: {
-            Text(t("The plugin file will be deleted from disk. It stays loaded until you restart Adium."))
+            Text(t("The plugin file will be deleted from disk. It stays loaded until you restart Fluorite."))
         }
     }
 

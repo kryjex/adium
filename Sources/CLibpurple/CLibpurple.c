@@ -321,7 +321,7 @@ static void *adium_request_action(const char *title, const char *primary,
     for (size_t i = 0; i < action_count; i++) {
         const char *title = va_arg(actions, const char *);
         /* Button labels carry a GTK mnemonic marker, for example "_Aceptar". The
-         * code drops the first underscore. Adium's UI has no mnemonic concept. */
+         * code drops the first underscore. Fluorite's UI has no mnemonic concept. */
         gchar *clean = g_strdup(title ? title : "");
         char *underscore = strchr(clean, '_');
         if (underscore) {

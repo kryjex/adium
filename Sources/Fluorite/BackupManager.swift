@@ -72,7 +72,7 @@ public final class BackupManager {
     
     /// Export all application data, preferences, and logs to a zip file, a tar file, or a target folder.
     public func exportBackup(to destinationURL: URL) throws {
-        let tempDir = fileManager.temporaryDirectory.appendingPathComponent("AdiumBackup_\(UUID().uuidString)", isDirectory: true)
+        let tempDir = fileManager.temporaryDirectory.appendingPathComponent("FluoriteBackup_\(UUID().uuidString)", isDirectory: true)
         try fileManager.createDirectory(at: tempDir, withIntermediateDirectories: true)
         
         defer {
@@ -205,7 +205,7 @@ public final class BackupManager {
     
     /// Import and restore data, preferences, and logs from a backup archive or directory.
     public func importBackup(from sourceURL: URL) throws {
-        let tempDir = fileManager.temporaryDirectory.appendingPathComponent("AdiumRestore_\(UUID().uuidString)", isDirectory: true)
+        let tempDir = fileManager.temporaryDirectory.appendingPathComponent("FluoriteRestore_\(UUID().uuidString)", isDirectory: true)
         try fileManager.createDirectory(at: tempDir, withIntermediateDirectories: true)
         
         defer {
@@ -309,8 +309,8 @@ public final class BackupManager {
         formatter.dateFormat = "yyyy-MM-dd_HHmmss"
         let dateStr = formatter.string(from: Date())
         panel.nameFieldStringValue = "Fluorite_Backup_\(dateStr).tar.gz"
-        panel.title = "Exportar Respaldo de Datos Adium"
-        panel.prompt = "Guardar Respaldo"
+        panel.title = t("Export Fluorite Backup Data")
+        panel.prompt = t("Save Backup")
         panel.allowedContentTypes = [.gzip, .zip]
         
         let handler: (NSApplication.ModalResponse) -> Void = { response in
@@ -333,8 +333,8 @@ public final class BackupManager {
     
     public func promptImportBackup(window: NSWindow? = nil, completion: @escaping (Result<URL, Error>) -> Void) {
         let panel = NSOpenPanel()
-        panel.title = "Restaurar Respaldo de Datos Adium"
-        panel.prompt = "Restaurar"
+        panel.title = t("Restore Fluorite Backup Data")
+        panel.prompt = t("Restore")
         panel.canChooseFiles = true
         panel.canChooseDirectories = true
         panel.allowsMultipleSelection = false

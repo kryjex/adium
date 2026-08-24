@@ -14,19 +14,31 @@
   <rect x="0" y="0" width="1024" height="1024" rx="230" fill="url(#bg)"/>
 
   <!-- Fluorite gem: a classic faceted octahedral silhouette, split into
-       three shaded facets (table, left, right) for a 3D sparkle. -->
+       three shaded facets (table, left, right) for a 3D sparkle. Sits
+       left of center to leave the top-right corner for the bubble, the
+       way the classic Adium icon paired its duck with one. -->
   <g>
     <!-- center / table facet: catches the most light -->
-    <polygon points="344,194 680,194 512,842" fill="url(#facetTop)"/>
+    <polygon points="336,300 604,300 470,818" fill="url(#facetTop)"/>
     <!-- left facet: mid tone -->
-    <polygon points="344,194 173,407 512,842" fill="#CBAAF2"/>
+    <polygon points="336,300 199,470 470,818" fill="#CBAAF2"/>
     <!-- right facet: in shadow, darkest -->
-    <polygon points="680,194 851,407 512,842" fill="#9D6FDE"/>
+    <polygon points="604,300 741,470 470,818" fill="#9D6FDE"/>
     <!-- girdle highlight line -->
-    <polygon points="173,407 851,407 794,437 230,437" fill="#7A46C4" opacity="0.55"/>
+    <polygon points="199,470 741,470 695,494 245,494" fill="#7A46C4" opacity="0.55"/>
   </g>
 
   <!-- outline for definition at small sizes -->
-  <polygon points="344,194 680,194 851,407 512,842 173,407"
+  <polygon points="336,300 604,300 741,470 470,818 199,470"
            fill="none" stroke="#3E1E78" stroke-width="15" stroke-linejoin="round" opacity="0.35"/>
+
+  <!-- speech bubble: says "messaging" at a glance, the one thing the gem
+       alone cannot. Tail points back at the gem. -->
+  <g>
+    <path d="M 735 330 L 700 380 L 770 350 Z" fill="#FFFFFF"/>
+    <circle cx="788" cy="248" r="125" fill="#FFFFFF"/>
+    <circle cx="736" cy="248" r="20" fill="#7A46C4"/>
+    <circle cx="788" cy="248" r="20" fill="#7A46C4"/>
+    <circle cx="840" cy="248" r="20" fill="#7A46C4"/>
+  </g>
 </svg>

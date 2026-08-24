@@ -52,7 +52,7 @@ public enum TeamsCallLink {
 
 /// This hosts Teams calls in a WKWebView window.
 /// The Teams web client handles WebRTC, signaling, and rendering.
-/// Adium only manages the window, the session, and the hardware permissions.
+/// Fluorite only manages the window, the session, and the hardware permissions.
 @MainActor
 public final class TeamsCallWindowController: NSObject {
     public static let shared = TeamsCallWindowController()
@@ -85,7 +85,7 @@ public final class TeamsCallWindowController: NSObject {
             defer: false
         )
         window.center()
-        window.title = t("Teams Video Call - Adium")
+        window.title = t("Teams Video Call - Fluorite")
         window.contentView = webView
         window.minSize = NSSize(width: 640, height: 420)
         window.isReleasedWhenClosed = false

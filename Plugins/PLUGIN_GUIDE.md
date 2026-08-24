@@ -89,7 +89,7 @@ Define the plugin initialization function and register it using libpurple's macr
 ```c
 #include <purple.h>
 
-#define YOUR_PLUGIN_ID "prpl-adium-yourprotocol"
+#define YOUR_PLUGIN_ID "prpl-yourname-yourprotocol"
 
 static void
 plugin_init(PurplePlugin *plugin)
@@ -107,7 +107,7 @@ plugin_init(PurplePlugin *plugin)
     info->summary = "Plugin Summary";
     info->description = "Plugin Description";
     info->author = "Developer Name";
-    info->homepage = "https://github.com/adium/adium";
+    info->homepage = "https://github.com/yourname/yourprotocol";
     info->extra_info = prpl_info;
 
     prpl_info->struct_size = sizeof(PurplePluginProtocolInfo);
@@ -176,7 +176,7 @@ public enum AccountProtocol: String, Codable, CaseIterable {
     
     public var purpleProtocolID: String {
         switch self {
-        case .yourprotocol: return "prpl-adium-yourprotocol"
+        case .yourprotocol: return "prpl-yourname-yourprotocol"
         }
     }
 }

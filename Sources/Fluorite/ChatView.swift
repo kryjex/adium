@@ -70,7 +70,7 @@ public struct ChatView: View {
                     }
                     .buttonStyle(.bordered)
                     .controlSize(.small)
-                    .help(t("Teams video call (opens inside Adium)"))
+                    .help(t("Teams video call (opens inside Fluorite)"))
                 }
 
                 if currentContact.isGroupChat {
@@ -414,7 +414,7 @@ struct MessageBubble: View {
                 }
                 .buttonStyle(.borderedProminent)
                 .controlSize(.small)
-                .help(t("Open the Teams call inside Adium"))
+                .help(t("Open the Teams call inside Fluorite"))
             } else if isJoinableCallEvent, let contact {
                 Button(action: { PurpleBridgeService.shared.startTeamsCall(for: contact) }) {
                     Label(t("Join the call"), systemImage: "phone.arrow.down.left.fill")
@@ -422,7 +422,7 @@ struct MessageBubble: View {
                 }
                 .buttonStyle(.borderedProminent)
                 .controlSize(.small)
-                .help(t("Open the Teams call inside Adium"))
+                .help(t("Open the Teams call inside Fluorite"))
             }
         }
         .frame(maxWidth: .infinity, alignment: .center)
@@ -481,7 +481,7 @@ struct MessageBubble: View {
                     }
                     .buttonStyle(.borderedProminent)
                     .controlSize(.small)
-                    .help(t("Open the Teams call inside Adium"))
+                    .help(t("Open the Teams call inside Fluorite"))
                 } else if isJoinableCallEvent, let contact {
                     Button(action: { PurpleBridgeService.shared.startTeamsCall(for: contact) }) {
                         Label(t("Join the call"), systemImage: "phone.arrow.down.left.fill")
@@ -489,7 +489,7 @@ struct MessageBubble: View {
                     }
                     .buttonStyle(.borderedProminent)
                     .controlSize(.small)
-                    .help(t("Open the Teams call inside Adium"))
+                    .help(t("Open the Teams call inside Fluorite"))
                 }
 
                 if theme == .bubbles {
