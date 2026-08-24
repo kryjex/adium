@@ -72,6 +72,8 @@ verifies that checksum before it installs anything.
 - **Transcripts** — searchable, filterable, exportable to plain text, JSON or HTML.
 - **Events engine** — per-event sounds, Dock bounce and badges across 10 event
   types, from *message received* to *mention in group chat*.
+- **Menu bar extra** — flip your status or read the unread total straight from
+  the menu bar, without bringing a window forward.
 - **Shortcuts / App Intents** — send a message, set your status or list contacts
   from Shortcuts, Spotlight or a keyboard trigger.
 - **Backup & restore** — one zip with your data and logs, passwords stripped out.
@@ -88,12 +90,11 @@ Passwords live in the macOS Keychain, transcripts and settings stay in
 
 ## Install
 
-### Download
+### [⬇ Download Fluorite](https://github.com/kryjex/fluorite/releases/latest)
 
-Signed and notarized builds are published on the
-[Releases page](https://github.com/kryjex/fluorite/releases) — tag a version and
-CI does the whole signing, notarization and stapling dance. Fluorite is at
-**v0.1**, so until the first release lands, build it from source. It takes a minute.
+Signed with a Developer ID and notarized, so it opens on a double-click —
+no Gatekeeper warning, no right-click dance. Apple silicon, macOS 14 or later.
+Drag it into `Applications` and add your first account.
 
 ### Build from source
 
