@@ -58,4 +58,4 @@ propose it upstream in the
 
 ## License
 
-GNU General Public License v2, inherited from Adium. See `License.txt`.
+GNU General Public License v2, inherited from Adium. See `LICENSE`.
