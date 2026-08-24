@@ -67,7 +67,7 @@ struct FluoriteApp: App {
             // The unread total rides on the menu bar icon, like the
             // classic dock badge.
             HStack(spacing: 2) {
-                Image(systemName: "bird")
+                Image(systemName: "diamond.fill")
                 if bridge.unreadCounts.values.reduce(0, +) > 0 {
                     Text("\(bridge.unreadCounts.values.reduce(0, +))")
                 }

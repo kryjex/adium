@@ -1,5 +1,7 @@
 # Fluorite
 
+<img src=".github/assets/fluorite-icon.png" width="128" alt="Fluorite icon" />
+
 ![Fluorite contact list](.github/assets/screenshot.png)
 
 Fluorite is a multi-protocol instant-messaging client for macOS. It is a
