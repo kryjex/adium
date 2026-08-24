@@ -17,16 +17,16 @@
        three shaded facets (table, left, right) for a 3D sparkle. -->
   <g>
     <!-- center / table facet: catches the most light -->
-    <polygon points="400,300 624,300 512,732" fill="url(#facetTop)"/>
+    <polygon points="344,194 680,194 512,842" fill="url(#facetTop)"/>
     <!-- left facet: mid tone -->
-    <polygon points="400,300 286,442 512,732" fill="#CBAAF2"/>
+    <polygon points="344,194 173,407 512,842" fill="#CBAAF2"/>
     <!-- right facet: in shadow, darkest -->
-    <polygon points="624,300 738,442 512,732" fill="#9D6FDE"/>
+    <polygon points="680,194 851,407 512,842" fill="#9D6FDE"/>
     <!-- girdle highlight line -->
-    <polygon points="286,442 738,442 700,462 324,462" fill="#7A46C4" opacity="0.55"/>
+    <polygon points="173,407 851,407 794,437 230,437" fill="#7A46C4" opacity="0.55"/>
   </g>
 
   <!-- outline for definition at small sizes -->
-  <polygon points="400,300 624,300 738,442 512,732 286,442"
-           fill="none" stroke="#3E1E78" stroke-width="10" stroke-linejoin="round" opacity="0.35"/>
+  <polygon points="344,194 680,194 851,407 512,842 173,407"
+           fill="none" stroke="#3E1E78" stroke-width="15" stroke-linejoin="round" opacity="0.35"/>
 </svg>
