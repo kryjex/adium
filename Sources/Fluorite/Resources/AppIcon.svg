@@ -4,33 +4,87 @@
       <stop offset="0" stop-color="#9B6BE0"/>
       <stop offset="1" stop-color="#5A2FA0"/>
     </linearGradient>
-    <linearGradient id="facetTop" x1="0" y1="0" x2="0" y2="1">
-      <stop offset="0" stop-color="#FFFFFF"/>
-      <stop offset="1" stop-color="#EFE3FF"/>
+    <!-- Clear slab. The low opacity lets the backdrop tint the stone. -->
+    <linearGradient id="slab" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#FFFFFF" stop-opacity="0.86"/>
+      <stop offset="0.5" stop-color="#F1E6FF" stop-opacity="0.48"/>
+      <stop offset="1" stop-color="#DCBFFF" stop-opacity="0.32"/>
     </linearGradient>
+    <linearGradient id="facetLeft" x1="0" y1="0" x2="1" y2="0.2">
+      <stop offset="0" stop-color="#F0E3FF" stop-opacity="0.55"/>
+      <stop offset="1" stop-color="#C39BF2" stop-opacity="0.36"/>
+    </linearGradient>
+    <linearGradient id="facetRight" x1="0" y1="0" x2="1" y2="0">
+      <stop offset="0" stop-color="#B78CF0" stop-opacity="0.40"/>
+      <stop offset="1" stop-color="#5F2FA8" stop-opacity="0.62"/>
+    </linearGradient>
+    <!-- Specular sweep. Sharp rise, long falloff: reads as a glare band. -->
+    <linearGradient id="shine" x1="0" y1="0" x2="1" y2="0">
+      <stop offset="0" stop-color="#FFFFFF" stop-opacity="0"/>
+      <stop offset="0.4" stop-color="#FFFFFF" stop-opacity="0.9"/>
+      <stop offset="0.6" stop-color="#FFFFFF" stop-opacity="0.12"/>
+      <stop offset="1" stop-color="#FFFFFF" stop-opacity="0"/>
+    </linearGradient>
+    <!-- Bands fade out along their length, the way glare dies on glass -->
+    <linearGradient id="fade" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#FFFFFF"/>
+      <stop offset="0.7" stop-color="#FFFFFF" stop-opacity="0.45"/>
+      <stop offset="1" stop-color="#FFFFFF" stop-opacity="0"/>
+    </linearGradient>
+    <mask id="bandFade" maskUnits="userSpaceOnUse" x="250" y="60" width="450" height="520">
+      <rect x="250" y="60" width="450" height="520" fill="url(#fade)"/>
+    </mask>
+    <clipPath id="gem">
+      <polygon points="336,300 604,300 741,470 470,818 199,470"/>
+    </clipPath>
+    <filter id="blur8" x="-40%" y="-40%" width="180%" height="180%">
+      <feGaussianBlur stdDeviation="8"/>
+    </filter>
+    <filter id="blur20" x="-80%" y="-80%" width="260%" height="260%">
+      <feGaussianBlur stdDeviation="20"/>
+    </filter>
   </defs>
 
   <!-- macOS squircle background -->
   <rect x="0" y="0" width="1024" height="1024" rx="230" fill="url(#bg)"/>
 
-  <!-- Fluorite gem: a classic faceted octahedral silhouette, split into
-       three shaded facets (table, left, right) for a 3D sparkle. Sits
-       left of center to leave the top-right corner for the bubble, the
-       way the classic Adium icon paired its duck with one. -->
-  <g>
-    <!-- center / table facet: catches the most light -->
-    <polygon points="336,300 604,300 470,818" fill="url(#facetTop)"/>
-    <!-- left facet: mid tone -->
-    <polygon points="336,300 199,470 470,818" fill="#CBAAF2"/>
-    <!-- right facet: in shadow, darkest -->
-    <polygon points="604,300 741,470 470,818" fill="#9D6FDE"/>
-    <!-- girdle highlight line -->
-    <polygon points="199,470 741,470 695,494 245,494" fill="#7A46C4" opacity="0.55"/>
+  <!-- Fluorite gem as translucent glass. Every layer sits inside one clip,
+       so glares and blurs cannot bleed past the silhouette. -->
+  <g clip-path="url(#gem)">
+    <!-- Contact shadow. Glass reads as lifted only with it. -->
+    <ellipse cx="474" cy="800" rx="220" ry="52" fill="#23093F" opacity="0.35" filter="url(#blur20)"/>
+
+    <!-- Clear body, then translucent facet tints -->
+    <rect x="150" y="250" width="650" height="620" fill="url(#slab)"/>
+    <polygon points="336,300 199,470 470,818" fill="url(#facetLeft)"/>
+    <polygon points="604,300 741,470 470,818" fill="url(#facetRight)"/>
+
+    <!-- Girdle refraction: a soft light seam, not a hard facet cut -->
+    <rect x="150" y="468" width="650" height="26" fill="#FFFFFF" opacity="0.30" filter="url(#blur8)"/>
+
+    <!-- Two glare bands raking across the crown -->
+    <g transform="rotate(-24 470 500)" mask="url(#bandFade)">
+      <rect x="350" y="60" width="125" height="490" fill="url(#shine)" opacity="0.9"/>
+      <rect x="555" y="60" width="48" height="450" fill="url(#shine)" opacity="0.65"/>
+    </g>
+
+    <!-- Caustic pooling above the keel -->
+    <ellipse cx="470" cy="716" rx="115" ry="155" fill="#FFFFFF" opacity="0.14" filter="url(#blur20)"/>
+
+    <!-- Inner rim light on the lit edges, inner shade at the base.
+         Half of each stroke falls outside the clip and disappears. -->
+    <path d="M 336 300 L 604 300 L 741 470" fill="none" stroke="#FFFFFF"
+          stroke-width="16" stroke-linejoin="round" opacity="0.85" filter="url(#blur8)"/>
+    <path d="M 199 470 L 470 818 L 741 470" fill="none" stroke="#2A1152"
+          stroke-width="20" stroke-linejoin="round" opacity="0.28" filter="url(#blur8)"/>
   </g>
 
-  <!-- outline for definition at small sizes -->
+  <!-- Crisp contour for definition at Dock sizes -->
   <polygon points="336,300 604,300 741,470 470,818 199,470"
-           fill="none" stroke="#3E1E78" stroke-width="15" stroke-linejoin="round" opacity="0.35"/>
+           fill="none" stroke="#3E1E78" stroke-width="14" stroke-linejoin="round" opacity="0.38"/>
+  <!-- Bright edge on the lit side -->
+  <path d="M 336 300 L 604 300 L 741 470" fill="none" stroke="#FFFFFF"
+        stroke-width="7" stroke-linejoin="round" opacity="0.9"/>
 
   <!-- speech bubble: says "messaging" at a glance, the one thing the gem
        alone cannot. Tail points back at the gem. -->
