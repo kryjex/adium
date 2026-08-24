@@ -1,5 +1,5 @@
-# Builds, signs, and notarizes a tagged release of Fluorite.app and attaches
-# the zip to the matching GitHub Release. Only runs on a tag push or a
+# Builds, signs, and notarizes a tagged release of Fluorite.app and
+# attaches the zip and the DMG to the matching GitHub Release. Only runs on
 # manual dispatch from this repository -- never on a pull_request event,
 # so a fork's PR can never see the signing secrets below.
 #
@@ -34,12 +34,12 @@ jobs:
     # /opt/homebrew (see Package.swift's Homebrew prefix search), which is
     # the arm64 Homebrew layout. macOS GitHub-hosted runners are arm64.
     runs-on: macos-14
-    timeout-minutes: 45
+    timeout-minutes: 60
     steps:
       - uses: actions/checkout@v4
 
       - name: Install build dependencies
-        run: brew install pidgin glib json-glib gettext dylibbundler
+        run: brew install pidgin glib json-glib gettext dylibbundler create-dmg
 
       - name: Import Developer ID certificate into a temporary keychain
         env:
@@ -76,10 +76,20 @@ jobs:
       - name: Build, sign, and notarize
         env:
           DEVELOPER_ID_APP: ${{ secrets.DEVELOPER_ID_APPLICATION_IDENTITY }}
-        run: make release DEVELOPER_ID_APP="$DEVELOPER_ID_APP" NOTARY_PROFILE=fluorite-notary
+        run: |
+          set -euo pipefail
+          # A tag push stamps its version into the bundle; a manual dispatch
+          # keeps the version from Packaging/Info.plist.
+          VERSION_ARG=""
+          if [ "$GITHUB_REF_TYPE" = tag ]; then
+            VERSION_ARG="VERSION=${GITHUB_REF_NAME#v}"
+          fi
+          make release DEVELOPER_ID_APP="$DEVELOPER_ID_APP" NOTARY_PROFILE=fluorite-notary $VERSION_ARG
 
       - name: Upload to the GitHub Release
         uses: softprops/action-gh-release@v2
         with:
-          files: build/Fluorite-*.zip
+          files: |
+            build/Fluorite-*.zip
+            build/Fluorite-*.dmg
           generate_release_notes: true

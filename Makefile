@@ -22,7 +22,20 @@ BUNDLED_PLUGINS=libxmpp.so ssl.so libsimple.so autoaccept.so buddynote.so \
 DEVELOPER_ID_APP?=
 NOTARY_PROFILE?=fluorite-notary
 
-.PHONY: all build app bundle-dylibs sign notarize release run install clean
+# Release version for the file names of the distributables. It is also
+# stamped into the bundle's CFBundleShortVersionString and CFBundleVersion.
+# The newest v* tag at HEAD wins; a build without one falls back to
+# Packaging/Info.plist. Override it on the command line:
+#   make release VERSION=0.2.0 ...
+VERSION := $(shell git describe --tags --match 'v[0-9]*' --abbrev=0 2>/dev/null | sed -e 's/^v//')
+ifeq ($(strip $(VERSION)),)
+VERSION := $(shell /usr/libexec/PlistBuddy -c "Print CFBundleShortVersionString" Packaging/Info.plist)
+endif
+
+DMG_STAGING=$(BUILD_DIR)/dmg-root
+DMG=$(BUILD_DIR)/Fluorite-$(VERSION).dmg
+
+.PHONY: all build app bundle-dylibs stamp-version sign notarize zip dmg release run install clean
 
 all: app
 
@@ -78,10 +91,17 @@ bundle-dylibs: app
 	codesign --force --deep --sign - $(APP)
 	@echo "Vendored dylibs and plugins into $(APP)"
 
+# Stamps $(VERSION) into the bundle's Info.plist. Runs before any Developer
+# ID signature: codesign seals Info.plist, so a later edit breaks the seal.
+stamp-version: bundle-dylibs
+	/usr/libexec/PlistBuddy -c "Set :CFBundleShortVersionString $(VERSION)" $(APP)/Contents/Info.plist
+	/usr/libexec/PlistBuddy -c "Set :CFBundleVersion $(VERSION)" $(APP)/Contents/Info.plist
+	@echo "Stamped $(APP) at version $(VERSION)"
+
 # Signs every embedded dylib and plugin, then the app itself, with
 # hardened runtime -- innermost first. Notarization requires Developer ID,
 # not the ad-hoc (-) signature `app` and `bundle-dylibs` use for local runs.
-sign: bundle-dylibs
+sign: stamp-version
 	@test -n "$(DEVELOPER_ID_APP)" || { \
 		echo 'Set DEVELOPER_ID_APP="Developer ID Application: NAME (TEAMID)"'; exit 1; }
 	for dylib in $(FRAMEWORKS_DIR)/*.dylib; do \
@@ -111,14 +131,43 @@ notarize: sign
 	spctl --assess --type execute --verbose $(APP)
 	@echo "Notarized $(APP)"
 
-# Builds the distributable zip for a GitHub release.
-release: notarize
-	$(eval VERSION := $(shell /usr/libexec/PlistBuddy -c "Print CFBundleShortVersionString" $(APP)/Contents/Info.plist))
+# Builds both distributables for a GitHub release: the zip and the DMG.
+release: notarize zip dmg
+
+# Zips the stapled app for updaters and no-mount downloads.
+zip: notarize
 	ditto -c -k --keepParent $(APP) $(BUILD_DIR)/Fluorite-$(VERSION).zip
 	@echo "Built $(BUILD_DIR)/Fluorite-$(VERSION).zip"
 
-run: app
-	open $(APP)
+# Packs the stapled app into Fluorite-<version>.dmg with the drag-to-
+# Applications layout from Packaging/dmg-background.tiff. The image then
+# gets its own Developer ID signature, its own notarization ticket, and a
+# staple: stapling only the app inside does not cover the volume.
+# create-dmg places icons through AppleScript, so this needs a GUI session;
+# GitHub macOS runners have one. Never pass --skip-jenkins: it skips that
+# placement.
+dmg: notarize
+	@test -n "$(DEVELOPER_ID_APP)" || { \
+		echo 'Set DEVELOPER_ID_APP="Developer ID Application: NAME (TEAMID)"'; exit 1; }
+	command -v create-dmg >/dev/null || { \
+		echo "create-dmg not found. Install it with: brew install create-dmg"; exit 1; }
+	rm -f $(DMG)
+	rm -rf $(DMG_STAGING)
+	mkdir -p $(DMG_STAGING)
+	cp -R $(APP) $(DMG_STAGING)/Fluorite.app
+	create-dmg \
+		--volname "Fluorite" \
+		--icon-size 128 \
+		--background Packaging/dmg-background.tiff \
+		--window-size 660 400 \
+		--icon "Fluorite.app" 170 190 \
+		--app-drop-link 490 190 \
+		$(DMG) $(DMG_STAGING)
+	codesign --force --timestamp --sign "$(DEVELOPER_ID_APP)" $(DMG)
+	xcrun notarytool submit $(DMG) --keychain-profile "$(NOTARY_PROFILE)" --wait
+	xcrun stapler staple $(DMG)
+	spctl -a -t open --context context:primary-signature -v $(DMG)
+	@echo "Built $(DMG)"
 
 install: app
 	mkdir -p ~/Applications
