@@ -1,5 +1,7 @@
 # Fluorite
 
+![Fluorite contact list](.github/assets/screenshot.png)
+
 Fluorite is a multi-protocol instant-messaging client for macOS. It is a
 Swift 6 rewrite of [Adium](https://adium.im), built on the same underlying
 engine Adium used: the
