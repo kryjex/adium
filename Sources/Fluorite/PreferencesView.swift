@@ -818,7 +818,7 @@ public struct EventsPreferencesTab: View {
 
                 Divider()
 
-                ForEach(AdiumEventType.allCases) { eventType in
+                ForEach(FluoriteEventType.allCases) { eventType in
                     if let rule = eventManager.rules[eventType] {
                         EventRuleConfigRow(rule: rule) { updatedRule in
                             eventManager.updateRule(updatedRule)

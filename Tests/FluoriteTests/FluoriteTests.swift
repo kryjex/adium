@@ -107,7 +107,7 @@ struct FluoriteTests {
 
     @Test("CLibpurple status info thread safety")
     func testCLibpurpleStatusInfo() {
-        if let status = adium_purple_get_status_info() {
+        if let status = fluorite_purple_get_status_info() {
             let str = String(cString: status)
             #expect(!str.isEmpty)
         }

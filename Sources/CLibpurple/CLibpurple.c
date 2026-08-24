@@ -13,33 +13,33 @@ static bool g_initialized = false;
 static pthread_mutex_t g_status_mutex = PTHREAD_MUTEX_INITIALIZER;
 static char g_status_buffer[512] = "Libpurple Idle";
 static GMainLoop *g_loop = NULL;
-static int adium_signal_handle = 0;
+static int fluorite_signal_handle = 0;
 
-static adium_purple_on_contact_cb g_contact_cb = NULL;
-static adium_purple_on_message_cb g_message_cb = NULL;
-static adium_purple_on_status_cb g_status_cb = NULL;
-static adium_purple_on_account_state_cb g_account_state_cb = NULL;
+static fluorite_purple_on_contact_cb g_contact_cb = NULL;
+static fluorite_purple_on_message_cb g_message_cb = NULL;
+static fluorite_purple_on_status_cb g_status_cb = NULL;
+static fluorite_purple_on_account_state_cb g_account_state_cb = NULL;
 
-static adium_purple_on_request_input_cb g_request_input_cb = NULL;
-static adium_purple_on_request_action_cb g_request_action_cb = NULL;
-static adium_purple_on_request_close_cb g_request_close_cb = NULL;
-static adium_purple_on_connection_progress_cb g_connection_progress_cb = NULL;
-static adium_purple_on_typing_cb g_typing_cb = NULL;
-static adium_purple_on_buddy_removed_cb g_buddy_removed_cb = NULL;
-static adium_purple_on_notify_message_cb g_notify_message_cb = NULL;
+static fluorite_purple_on_request_input_cb g_request_input_cb = NULL;
+static fluorite_purple_on_request_action_cb g_request_action_cb = NULL;
+static fluorite_purple_on_request_close_cb g_request_close_cb = NULL;
+static fluorite_purple_on_connection_progress_cb g_connection_progress_cb = NULL;
+static fluorite_purple_on_typing_cb g_typing_cb = NULL;
+static fluorite_purple_on_buddy_removed_cb g_buddy_removed_cb = NULL;
+static fluorite_purple_on_notify_message_cb g_notify_message_cb = NULL;
 
-static adium_purple_on_xfer_new_cb g_xfer_new_cb = NULL;
-static adium_purple_on_xfer_update_cb g_xfer_update_cb = NULL;
-static adium_purple_on_xfer_cancel_cb g_xfer_cancel_cb = NULL;
-static adium_purple_on_xfer_destroyed_cb g_xfer_destroyed_cb = NULL;
+static fluorite_purple_on_xfer_new_cb g_xfer_new_cb = NULL;
+static fluorite_purple_on_xfer_update_cb g_xfer_update_cb = NULL;
+static fluorite_purple_on_xfer_cancel_cb g_xfer_cancel_cb = NULL;
+static fluorite_purple_on_xfer_destroyed_cb g_xfer_destroyed_cb = NULL;
 
-static adium_purple_on_chat_joined_cb g_chat_joined_cb = NULL;
-static adium_purple_on_chat_left_cb g_chat_left_cb = NULL;
-static adium_purple_on_chat_message_cb g_chat_message_cb = NULL;
-static adium_purple_on_chat_buddy_joined_cb g_chat_buddy_joined_cb = NULL;
-static adium_purple_on_chat_buddy_left_cb g_chat_buddy_left_cb = NULL;
-static adium_purple_on_chat_listed_cb g_chat_listed_cb = NULL;
-static adium_purple_on_chat_unlisted_cb g_chat_unlisted_cb = NULL;
+static fluorite_purple_on_chat_joined_cb g_chat_joined_cb = NULL;
+static fluorite_purple_on_chat_left_cb g_chat_left_cb = NULL;
+static fluorite_purple_on_chat_message_cb g_chat_message_cb = NULL;
+static fluorite_purple_on_chat_buddy_joined_cb g_chat_buddy_joined_cb = NULL;
+static fluorite_purple_on_chat_buddy_left_cb g_chat_buddy_left_cb = NULL;
+static fluorite_purple_on_chat_listed_cb g_chat_listed_cb = NULL;
+static fluorite_purple_on_chat_unlisted_cb g_chat_unlisted_cb = NULL;
 
 /* This set holds live PurpleXfer pointers, touched only on the purple thread.
  * libpurple calls the new_xfer and destroy UI ops on that thread. do_xfer_accept
@@ -55,10 +55,10 @@ static void ensure_live_xfers_table(void) {
 
 /* --- File Transfer UI Ops --- */
 
-static void adium_xfer_new_xfer(PurpleXfer *xfer) {
+static void fluorite_xfer_new_xfer(PurpleXfer *xfer) {
     if (!xfer) return;
     /* Take a reference so the xfer cannot be freed while Swift holds its address.
-     * adium_xfer_destroy releases the reference. This mirrors Pidgin's gtkft.c
+     * fluorite_xfer_destroy releases the reference. This mirrors Pidgin's gtkft.c
      * ref/unref pairing. */
     purple_xfer_ref(xfer);
     ensure_live_xfers_table();
@@ -74,7 +74,7 @@ static void adium_xfer_new_xfer(PurpleXfer *xfer) {
     }
 }
 
-static void adium_xfer_destroy(PurpleXfer *xfer) {
+static void fluorite_xfer_destroy(PurpleXfer *xfer) {
     if (!xfer) return;
     if (g_live_xfers) {
         g_hash_table_remove(g_live_xfers, xfer);
@@ -85,7 +85,7 @@ static void adium_xfer_destroy(PurpleXfer *xfer) {
     purple_xfer_unref(xfer);
 }
 
-static void adium_xfer_update_progress(PurpleXfer *xfer, double percent) {
+static void fluorite_xfer_update_progress(PurpleXfer *xfer, double percent) {
     (void)percent;
     if (!xfer) return;
     size_t bytes_sent = purple_xfer_get_bytes_sent(xfer);
@@ -96,14 +96,14 @@ static void adium_xfer_update_progress(PurpleXfer *xfer, double percent) {
     }
 }
 
-static void adium_xfer_cancel_local(PurpleXfer *xfer) {
+static void fluorite_xfer_cancel_local(PurpleXfer *xfer) {
     if (!xfer) return;
     if (g_xfer_cancel_cb) {
         g_xfer_cancel_cb((void*)xfer, true);
     }
 }
 
-static void adium_xfer_cancel_remote(PurpleXfer *xfer) {
+static void fluorite_xfer_cancel_remote(PurpleXfer *xfer) {
     if (!xfer) return;
     if (g_xfer_cancel_cb) {
         g_xfer_cancel_cb((void*)xfer, false);
@@ -111,12 +111,12 @@ static void adium_xfer_cancel_remote(PurpleXfer *xfer) {
 }
 
 static PurpleXferUiOps xfer_ui_ops = {
-    .new_xfer = adium_xfer_new_xfer,
-    .destroy = adium_xfer_destroy,
+    .new_xfer = fluorite_xfer_new_xfer,
+    .destroy = fluorite_xfer_destroy,
     .add_xfer = NULL,
-    .update_progress = adium_xfer_update_progress,
-    .cancel_local = adium_xfer_cancel_local,
-    .cancel_remote = adium_xfer_cancel_remote,
+    .update_progress = fluorite_xfer_update_progress,
+    .cancel_local = fluorite_xfer_cancel_local,
+    .cancel_remote = fluorite_xfer_cancel_remote,
     .ui_write = NULL,
     .ui_read = NULL,
     .data_not_sent = NULL,
@@ -186,28 +186,28 @@ static PurpleEventLoopUiOps eventloop_ops = {
 
 /* --- Core UI Ops & Debug --- */
 
-static void adium_ui_init(void) {}
-static void adium_ui_quit(void) {}
+static void fluorite_ui_init(void) {}
+static void fluorite_ui_quit(void) {}
 
 static PurpleCoreUiOps core_ui_ops = {
     .ui_prefs_init = NULL,
     .debug_ui_init = NULL,
-    .ui_init = adium_ui_init,
-    .quit = adium_ui_quit,
+    .ui_init = fluorite_ui_init,
+    .quit = fluorite_ui_quit,
     .get_ui_info = NULL,
     ._purple_reserved1 = NULL,
     ._purple_reserved2 = NULL,
     ._purple_reserved3 = NULL
 };
 
-static void adium_debug_print(PurpleDebugLevel level, const char *category, const char *arg) {
+static void fluorite_debug_print(PurpleDebugLevel level, const char *category, const char *arg) {
     if (arg) {
         printf("[libpurple %d][%s] %s", level, category ? category : "core", arg);
     }
 }
 
 static PurpleDebugUiOps debug_ui_ops = {
-    .print = adium_debug_print,
+    .print = fluorite_debug_print,
     .is_enabled = NULL,
     ._purple_reserved1 = NULL,
     ._purple_reserved2 = NULL,
@@ -215,7 +215,7 @@ static PurpleDebugUiOps debug_ui_ops = {
     ._purple_reserved4 = NULL
 };
 
-static void* adium_notify_uri(const char *uri) {
+static void* fluorite_notify_uri(const char *uri) {
     if (uri && uri[0] != '\0') {
         char cmd[2048];
         snprintf(cmd, sizeof(cmd), "open \"%s\"", uri);
@@ -224,7 +224,7 @@ static void* adium_notify_uri(const char *uri) {
     return NULL;
 }
 
-static void* adium_notify_message(PurpleNotifyMsgType type, const char *title, const char *primary, const char *secondary) {
+static void* fluorite_notify_message(PurpleNotifyMsgType type, const char *title, const char *primary, const char *secondary) {
     if (g_notify_message_cb) {
         g_notify_message_cb((int)type, title, primary, secondary);
     }
@@ -232,14 +232,14 @@ static void* adium_notify_message(PurpleNotifyMsgType type, const char *title, c
 }
 
 static PurpleNotifyUiOps notify_ui_ops = {
-    .notify_message = adium_notify_message,
+    .notify_message = fluorite_notify_message,
     .notify_email = NULL,
     .notify_emails = NULL,
     .notify_formatted = NULL,
     .notify_searchresults = NULL,
     .notify_searchresults_new_rows = NULL,
     .notify_userinfo = NULL,
-    .notify_uri = adium_notify_uri,
+    .notify_uri = fluorite_notify_uri,
     .close_notify = NULL,
     ._purple_reserved1 = NULL,
     ._purple_reserved2 = NULL,
@@ -257,9 +257,9 @@ typedef struct {
     PurpleAccount *account;
     size_t action_count;
     GCallback *action_cbs;
-} AdiumRequestHandle;
+} FluoriteRequestHandle;
 
-/* This set holds live AdiumRequestHandle pointers. adium_close_request is the
+/* This set holds live FluoriteRequestHandle pointers. fluorite_close_request is the
  * only place that frees a handle. A stale respond op can queue before libpurple
  * closes the handle, for example purple_request_close_with_handle on disconnect.
  * The set lets that op detect the closed handle and become a no-op instead of
@@ -274,7 +274,7 @@ static void ensure_live_requests_table(void) {
     }
 }
 
-static void *adium_request_input(const char *title, const char *primary,
+static void *fluorite_request_input(const char *title, const char *primary,
                                const char *secondary, const char *default_value,
                                gboolean multiline, gboolean masked, gchar *hint,
                                const char *ok_text, GCallback ok_cb,
@@ -282,7 +282,7 @@ static void *adium_request_input(const char *title, const char *primary,
                                PurpleAccount *account, const char *who,
                                PurpleConversation *conv, void *user_data) {
     (void)multiline; (void)ok_text; (void)cancel_text; (void)who; (void)conv;
-    AdiumRequestHandle *handle = g_new0(AdiumRequestHandle, 1);
+    FluoriteRequestHandle *handle = g_new0(FluoriteRequestHandle, 1);
     handle->type = PURPLE_REQUEST_INPUT;
     handle->ok_cb = ok_cb;
     handle->cancel_cb = cancel_cb;
@@ -303,13 +303,13 @@ static void *adium_request_input(const char *title, const char *primary,
     return (void*)handle;
 }
 
-static void *adium_request_action(const char *title, const char *primary,
+static void *fluorite_request_action(const char *title, const char *primary,
                                 const char *secondary, int default_action,
                                 PurpleAccount *account, const char *who,
                                 PurpleConversation *conv, void *user_data,
                                 size_t action_count, va_list actions) {
     (void)who; (void)conv;
-    AdiumRequestHandle *handle = g_new0(AdiumRequestHandle, 1);
+    FluoriteRequestHandle *handle = g_new0(FluoriteRequestHandle, 1);
     handle->type = PURPLE_REQUEST_ACTION;
     handle->user_data = user_data;
     handle->account = account;
@@ -356,7 +356,7 @@ static void *adium_request_action(const char *title, const char *primary,
     }
 }
 
-static void *adium_request_action_with_icon(const char *title, const char *primary,
+static void *fluorite_request_action_with_icon(const char *title, const char *primary,
                                           const char *secondary, int default_action,
                                           PurpleAccount *account, const char *who,
                                           PurpleConversation *conv,
@@ -364,10 +364,10 @@ static void *adium_request_action_with_icon(const char *title, const char *prima
                                           void *user_data,
                                           size_t action_count, va_list actions) {
     (void)icon_data; (void)icon_size;
-    return adium_request_action(title, primary, secondary, default_action, account, who, conv, user_data, action_count, actions);
+    return fluorite_request_action(title, primary, secondary, default_action, account, who, conv, user_data, action_count, actions);
 }
 
-static void adium_close_request(PurpleRequestType type, void *ui_handle) {
+static void fluorite_close_request(PurpleRequestType type, void *ui_handle) {
     (void)type;
     if (!ui_handle) return;
     /* This is the only place that removes a handle from the live set and frees it.
@@ -378,7 +378,7 @@ static void adium_close_request(PurpleRequestType type, void *ui_handle) {
         return;
     }
     g_hash_table_remove(g_live_requests, ui_handle);
-    AdiumRequestHandle *handle = (AdiumRequestHandle *)ui_handle;
+    FluoriteRequestHandle *handle = (FluoriteRequestHandle *)ui_handle;
     if (g_request_close_cb) {
         g_request_close_cb((void*)handle);
     }
@@ -389,21 +389,21 @@ static void adium_close_request(PurpleRequestType type, void *ui_handle) {
 }
 
 static PurpleRequestUiOps request_ui_ops = {
-    .request_input = adium_request_input,
+    .request_input = fluorite_request_input,
     .request_choice = NULL,
-    .request_action = adium_request_action,
+    .request_action = fluorite_request_action,
     .request_fields = NULL,
     .request_file = NULL,
-    .close_request = adium_close_request,
+    .close_request = fluorite_close_request,
     .request_folder = NULL,
-    .request_action_with_icon = adium_request_action_with_icon,
+    .request_action_with_icon = fluorite_request_action_with_icon,
     ._purple_reserved1 = NULL,
     ._purple_reserved2 = NULL
 };
 
 static void update_status(const char* fmt, ...);
 
-static void adium_connection_connect_progress(PurpleConnection *gc, const char *text, size_t step, size_t step_count) {
+static void fluorite_connection_connect_progress(PurpleConnection *gc, const char *text, size_t step, size_t step_count) {
     if (!gc) return;
     PurpleAccount *account = purple_connection_get_account(gc);
     if (!account) return;
@@ -418,10 +418,10 @@ static void adium_connection_connect_progress(PurpleConnection *gc, const char *
 
 /* connected, disconnected, and report_disconnect_reason stay unset on purpose.
  * The account-signed-on, account-signed-off, and account-connection-error
- * signals in adium_purple_init already cover the same events. Wiring both
+ * signals in fluorite_purple_init already cover the same events. Wiring both
  * paths fires every connection state change twice into Swift. */
 static PurpleConnectionUiOps connection_ui_ops = {
-    .connect_progress = adium_connection_connect_progress,
+    .connect_progress = fluorite_connection_connect_progress,
     .connected = NULL,
     .disconnected = NULL,
     .notice = NULL,
@@ -478,7 +478,7 @@ static void extract_inline_image(const char *message, PurpleMessageFlags flags, 
  * The conversation signals do not carry mtime, so this is the only capture
  * point that keeps history timestamps. serv_got_im routes received messages
  * here, and common_send routes the local echo of a send here. */
-static void adium_write_im(PurpleConversation *conv, const char *who, const char *message, PurpleMessageFlags flags, time_t mtime) {
+static void fluorite_write_im(PurpleConversation *conv, const char *who, const char *message, PurpleMessageFlags flags, time_t mtime) {
     if (!g_message_cb || !conv || !message) return;
 
     bool is_send = (flags & PURPLE_MESSAGE_SEND) != 0;
@@ -699,7 +699,7 @@ static void cb_chat_buddy_left(PurpleConversation *conv, const char *name, const
 /* Conversation ui op. serv_got_chat_in routes every chat message here with
  * the real message time. History replays keep their original timestamps.
  * The server echo of an own send arrives here with PURPLE_MESSAGE_SEND. */
-static void adium_write_chat(PurpleConversation *conv, const char *who, const char *message, PurpleMessageFlags flags, time_t mtime) {
+static void fluorite_write_chat(PurpleConversation *conv, const char *who, const char *message, PurpleMessageFlags flags, time_t mtime) {
     if (!g_chat_message_cb || !conv || !message) return;
     bool is_send = (flags & PURPLE_MESSAGE_SEND) != 0;
     bool is_recv = (flags & PURPLE_MESSAGE_RECV) != 0;
@@ -720,19 +720,19 @@ static void adium_write_chat(PurpleConversation *conv, const char *who, const ch
  * bypass write_im and write_chat: prpl notices, error presentation
  * (purple_conv_present_error), inline image writes, and echoes of
  * messages sent from another device. */
-static void adium_write_conv(PurpleConversation *conv, const char *name, const char *alias, const char *message, PurpleMessageFlags flags, time_t mtime) {
+static void fluorite_write_conv(PurpleConversation *conv, const char *name, const char *alias, const char *message, PurpleMessageFlags flags, time_t mtime) {
     (void)alias;
     if (!conv) return;
     if (purple_conversation_get_type(conv) == PURPLE_CONV_TYPE_CHAT) {
-        adium_write_chat(conv, name, message, flags, mtime);
+        fluorite_write_chat(conv, name, message, flags, mtime);
     } else {
-        adium_write_im(conv, name, message, flags, mtime);
+        fluorite_write_im(conv, name, message, flags, mtime);
     }
 }
 
 /* libpurple does not echo own chat sends locally. The server echo can lag,
  * so this signal shows the message at send time. The Swift layer
- * deduplicates the later echo from adium_write_chat. */
+ * deduplicates the later echo from fluorite_write_chat. */
 static void cb_sent_chat_msg(PurpleAccount *account, const char *message, int id, void *data) {
     (void)data;
     if (!account || !message) return;
@@ -834,7 +834,7 @@ static gpointer dns_worker(gpointer user_data) {
     return NULL;
 }
 
-static gboolean adium_dns_resolve_host(PurpleDnsQueryData *query_data,
+static gboolean fluorite_dns_resolve_host(PurpleDnsQueryData *query_data,
                                        PurpleDnsQueryResolvedCallback resolved_cb,
                                        PurpleDnsQueryFailedCallback failed_cb) {
     if (!g_live_dns) {
@@ -849,7 +849,7 @@ static gboolean adium_dns_resolve_host(PurpleDnsQueryData *query_data,
     req->failed_cb = failed_cb;
     g_hash_table_insert(g_live_dns, query_data, GSIZE_TO_POINTER(req->seq));
 
-    GThread *thread = g_thread_try_new("adium-dns", dns_worker, req, NULL);
+    GThread *thread = g_thread_try_new("fluorite-dns", dns_worker, req, NULL);
     if (!thread) {
         /* FALSE hands the query back to the core resolver. */
         g_hash_table_remove(g_live_dns, query_data);
@@ -862,15 +862,15 @@ static gboolean adium_dns_resolve_host(PurpleDnsQueryData *query_data,
 
 /* libpurple frees the query after this call. A worker still in flight
  * finds the entry gone and only frees its own data. */
-static void adium_dns_destroy(PurpleDnsQueryData *query_data) {
+static void fluorite_dns_destroy(PurpleDnsQueryData *query_data) {
     if (g_live_dns) {
         g_hash_table_remove(g_live_dns, query_data);
     }
 }
 
 static PurpleDnsQueryUiOps dnsquery_ui_ops = {
-    .resolve_host = adium_dns_resolve_host,
-    .destroy = adium_dns_destroy,
+    .resolve_host = fluorite_dns_resolve_host,
+    .destroy = fluorite_dns_destroy,
     ._purple_reserved1 = NULL,
     ._purple_reserved2 = NULL,
     ._purple_reserved3 = NULL,
@@ -880,9 +880,9 @@ static PurpleDnsQueryUiOps dnsquery_ui_ops = {
 static PurpleConversationUiOps conversation_ui_ops = {
     .create_conversation = NULL,
     .destroy_conversation = NULL,
-    .write_chat = adium_write_chat,
-    .write_im = adium_write_im,
-    .write_conv = adium_write_conv,
+    .write_chat = fluorite_write_chat,
+    .write_im = fluorite_write_im,
+    .write_conv = fluorite_write_conv,
     .chat_add_users = NULL,
     .chat_rename_user = NULL,
     .chat_remove_users = NULL,
@@ -908,7 +908,7 @@ static void* event_loop_thread(void* arg) {
     return NULL;
 }
 
-void adium_purple_start_event_loop(void) {
+void fluorite_purple_start_event_loop(void) {
     if (g_loop) return;
     pthread_t thread;
     int rc = pthread_create(&thread, NULL, event_loop_thread, NULL);
@@ -922,7 +922,7 @@ void adium_purple_start_event_loop(void) {
 
 /* --- Public API --- */
 
-bool adium_purple_init(const char* custom_plugin_dir, const char* user_dir) {
+bool fluorite_purple_init(const char* custom_plugin_dir, const char* user_dir) {
     if (g_initialized) return true;
 
     if (user_dir && user_dir[0] != '\0') {
@@ -943,6 +943,9 @@ bool adium_purple_init(const char* custom_plugin_dir, const char* user_dir) {
         purple_plugins_add_search_path(custom_plugin_dir);
     }
 
+    /* This is libpurple's UI id, not the app name. It stays "adium-swift".
+     * A different id would not match the enabled flag already saved in
+     * existing users' accounts.xml. */
     if (!purple_core_init("adium-swift")) {
         update_status("Could not initialize purple_core");
         return false;
@@ -957,27 +960,27 @@ bool adium_purple_init(const char* custom_plugin_dir, const char* user_dir) {
      * write_conv covers direct purple_conversation_write calls: prpl
      * notices, error presentation, and multi-device echoes. All three
      * carry the real mtime, which no conversation signal does. */
-    purple_signal_connect(conv_handle, "buddy-typing", &adium_signal_handle, PURPLE_CALLBACK(cb_buddy_typing), NULL);
-    purple_signal_connect(conv_handle, "buddy-typing-stopped", &adium_signal_handle, PURPLE_CALLBACK(cb_buddy_typing_stopped), NULL);
-    purple_signal_connect(conv_handle, "chat-joined", &adium_signal_handle, PURPLE_CALLBACK(cb_chat_joined), NULL);
-    purple_signal_connect(conv_handle, "chat-left", &adium_signal_handle, PURPLE_CALLBACK(cb_chat_left), NULL);
-    purple_signal_connect(conv_handle, "chat-buddy-joined", &adium_signal_handle, PURPLE_CALLBACK(cb_chat_buddy_joined), NULL);
-    purple_signal_connect(conv_handle, "chat-buddy-left", &adium_signal_handle, PURPLE_CALLBACK(cb_chat_buddy_left), NULL);
-    purple_signal_connect(conv_handle, "sent-chat-msg", &adium_signal_handle, PURPLE_CALLBACK(cb_sent_chat_msg), NULL);
+    purple_signal_connect(conv_handle, "buddy-typing", &fluorite_signal_handle, PURPLE_CALLBACK(cb_buddy_typing), NULL);
+    purple_signal_connect(conv_handle, "buddy-typing-stopped", &fluorite_signal_handle, PURPLE_CALLBACK(cb_buddy_typing_stopped), NULL);
+    purple_signal_connect(conv_handle, "chat-joined", &fluorite_signal_handle, PURPLE_CALLBACK(cb_chat_joined), NULL);
+    purple_signal_connect(conv_handle, "chat-left", &fluorite_signal_handle, PURPLE_CALLBACK(cb_chat_left), NULL);
+    purple_signal_connect(conv_handle, "chat-buddy-joined", &fluorite_signal_handle, PURPLE_CALLBACK(cb_chat_buddy_joined), NULL);
+    purple_signal_connect(conv_handle, "chat-buddy-left", &fluorite_signal_handle, PURPLE_CALLBACK(cb_chat_buddy_left), NULL);
+    purple_signal_connect(conv_handle, "sent-chat-msg", &fluorite_signal_handle, PURPLE_CALLBACK(cb_sent_chat_msg), NULL);
 
     void *blist_handle = purple_blist_get_handle();
-    purple_signal_connect(blist_handle, "buddy-signed-on", &adium_signal_handle, PURPLE_CALLBACK(cb_buddy_signed_on_off), NULL);
-    purple_signal_connect(blist_handle, "buddy-signed-off", &adium_signal_handle, PURPLE_CALLBACK(cb_buddy_signed_on_off), NULL);
-    purple_signal_connect(blist_handle, "buddy-status-changed", &adium_signal_handle, PURPLE_CALLBACK(cb_buddy_status_changed), NULL);
-    purple_signal_connect(blist_handle, "buddy-removed", &adium_signal_handle, PURPLE_CALLBACK(cb_buddy_removed), NULL);
-    purple_signal_connect(blist_handle, "blist-node-added", &adium_signal_handle, PURPLE_CALLBACK(cb_blist_node_added), NULL);
-    purple_signal_connect(blist_handle, "blist-node-removed", &adium_signal_handle, PURPLE_CALLBACK(cb_blist_node_removed), NULL);
-    purple_signal_connect(blist_handle, "blist-node-aliased", &adium_signal_handle, PURPLE_CALLBACK(cb_blist_node_aliased), NULL);
+    purple_signal_connect(blist_handle, "buddy-signed-on", &fluorite_signal_handle, PURPLE_CALLBACK(cb_buddy_signed_on_off), NULL);
+    purple_signal_connect(blist_handle, "buddy-signed-off", &fluorite_signal_handle, PURPLE_CALLBACK(cb_buddy_signed_on_off), NULL);
+    purple_signal_connect(blist_handle, "buddy-status-changed", &fluorite_signal_handle, PURPLE_CALLBACK(cb_buddy_status_changed), NULL);
+    purple_signal_connect(blist_handle, "buddy-removed", &fluorite_signal_handle, PURPLE_CALLBACK(cb_buddy_removed), NULL);
+    purple_signal_connect(blist_handle, "blist-node-added", &fluorite_signal_handle, PURPLE_CALLBACK(cb_blist_node_added), NULL);
+    purple_signal_connect(blist_handle, "blist-node-removed", &fluorite_signal_handle, PURPLE_CALLBACK(cb_blist_node_removed), NULL);
+    purple_signal_connect(blist_handle, "blist-node-aliased", &fluorite_signal_handle, PURPLE_CALLBACK(cb_blist_node_aliased), NULL);
 
     void *accounts_handle = purple_accounts_get_handle();
-    purple_signal_connect(accounts_handle, "account-signed-on", &adium_signal_handle, PURPLE_CALLBACK(cb_account_signed_on), NULL);
-    purple_signal_connect(accounts_handle, "account-signed-off", &adium_signal_handle, PURPLE_CALLBACK(cb_account_signed_off), NULL);
-    purple_signal_connect(accounts_handle, "account-connection-error", &adium_signal_handle, PURPLE_CALLBACK(cb_account_connection_error), NULL);
+    purple_signal_connect(accounts_handle, "account-signed-on", &fluorite_signal_handle, PURPLE_CALLBACK(cb_account_signed_on), NULL);
+    purple_signal_connect(accounts_handle, "account-signed-off", &fluorite_signal_handle, PURPLE_CALLBACK(cb_account_signed_off), NULL);
+    purple_signal_connect(accounts_handle, "account-connection-error", &fluorite_signal_handle, PURPLE_CALLBACK(cb_account_connection_error), NULL);
 
     update_status("Libpurple core ready");
     g_initialized = true;
@@ -1021,7 +1024,7 @@ static gboolean do_load_plugin(gpointer user_data) {
     return G_SOURCE_REMOVE;
 }
 
-bool adium_purple_load_plugin(const char* plugin_path) {
+bool fluorite_purple_load_plugin(const char* plugin_path) {
     if (!plugin_path) return false;
     LoadPluginData *data = g_new0(LoadPluginData, 1);
     data->plugin_path = g_strdup(plugin_path);
@@ -1029,7 +1032,7 @@ bool adium_purple_load_plugin(const char* plugin_path) {
     return true;
 }
 
-const char* adium_purple_get_status_info(void) {
+const char* fluorite_purple_get_status_info(void) {
     static _Thread_local char local_status[512];
     pthread_mutex_lock(&g_status_mutex);
     g_strlcpy(local_status, g_status_buffer, sizeof(local_status));
@@ -1037,11 +1040,11 @@ const char* adium_purple_get_status_info(void) {
     return local_status;
 }
 
-void adium_purple_set_event_callbacks(
-    adium_purple_on_contact_cb contact_cb,
-    adium_purple_on_message_cb message_cb,
-    adium_purple_on_status_cb status_cb,
-    adium_purple_on_account_state_cb account_state_cb
+void fluorite_purple_set_event_callbacks(
+    fluorite_purple_on_contact_cb contact_cb,
+    fluorite_purple_on_message_cb message_cb,
+    fluorite_purple_on_status_cb status_cb,
+    fluorite_purple_on_account_state_cb account_state_cb
 ) {
     g_contact_cb = contact_cb;
     g_message_cb = message_cb;
@@ -1049,14 +1052,14 @@ void adium_purple_set_event_callbacks(
     g_account_state_cb = account_state_cb;
 }
 
-void adium_purple_set_extended_event_callbacks(
-    adium_purple_on_request_input_cb request_input_cb,
-    adium_purple_on_request_action_cb request_action_cb,
-    adium_purple_on_request_close_cb request_close_cb,
-    adium_purple_on_connection_progress_cb connection_progress_cb,
-    adium_purple_on_typing_cb typing_cb,
-    adium_purple_on_buddy_removed_cb buddy_removed_cb,
-    adium_purple_on_notify_message_cb notify_message_cb
+void fluorite_purple_set_extended_event_callbacks(
+    fluorite_purple_on_request_input_cb request_input_cb,
+    fluorite_purple_on_request_action_cb request_action_cb,
+    fluorite_purple_on_request_close_cb request_close_cb,
+    fluorite_purple_on_connection_progress_cb connection_progress_cb,
+    fluorite_purple_on_typing_cb typing_cb,
+    fluorite_purple_on_buddy_removed_cb buddy_removed_cb,
+    fluorite_purple_on_notify_message_cb notify_message_cb
 ) {
     g_request_input_cb = request_input_cb;
     g_request_action_cb = request_action_cb;
@@ -1080,13 +1083,13 @@ static gboolean do_request_input_respond(gpointer user_data) {
     RequestInputRespondData *data = (RequestInputRespondData *)user_data;
     if (!data) return G_SOURCE_REMOVE;
     if (g_live_requests && g_hash_table_contains(g_live_requests, data->handle)) {
-        AdiumRequestHandle *handle = (AdiumRequestHandle *)data->handle;
+        FluoriteRequestHandle *handle = (FluoriteRequestHandle *)data->handle;
         if (data->ok && handle->ok_cb) {
             ((PurpleRequestInputCb)handle->ok_cb)(handle->user_data, data->input_text ? data->input_text : "");
         } else if (!data->ok && handle->cancel_cb) {
             ((PurpleRequestInputCb)handle->cancel_cb)(handle->user_data, NULL);
         }
-        /* purple_request_close routes through adium_close_request, the single place
+        /* purple_request_close routes through fluorite_close_request, the single place
          * that removes the handle from the live set and frees it. */
         purple_request_close(handle->type, handle);
     }
@@ -1095,7 +1098,7 @@ static gboolean do_request_input_respond(gpointer user_data) {
     return G_SOURCE_REMOVE;
 }
 
-void adium_purple_request_input_respond(void* request_handle, const char* input_text, bool ok) {
+void fluorite_purple_request_input_respond(void* request_handle, const char* input_text, bool ok) {
     if (!request_handle) return;
     RequestInputRespondData *data = g_new0(RequestInputRespondData, 1);
     data->handle = request_handle;
@@ -1117,7 +1120,7 @@ static gboolean do_request_action_respond(gpointer user_data) {
     RequestActionRespondData *data = (RequestActionRespondData *)user_data;
     if (!data) return G_SOURCE_REMOVE;
     if (g_live_requests && g_hash_table_contains(g_live_requests, data->handle)) {
-        AdiumRequestHandle *handle = (AdiumRequestHandle *)data->handle;
+        FluoriteRequestHandle *handle = (FluoriteRequestHandle *)data->handle;
         if (data->action_index >= 0 && (size_t)data->action_index < handle->action_count && handle->action_cbs[data->action_index]) {
             ((PurpleRequestActionCb)handle->action_cbs[data->action_index])(handle->user_data, data->action_index);
         }
@@ -1127,7 +1130,7 @@ static gboolean do_request_action_respond(gpointer user_data) {
     return G_SOURCE_REMOVE;
 }
 
-void adium_purple_request_action_respond(void* request_handle, int action_index) {
+void fluorite_purple_request_action_respond(void* request_handle, int action_index) {
     if (!request_handle) return;
     RequestActionRespondData *data = g_new0(RequestActionRespondData, 1);
     data->handle = request_handle;
@@ -1155,6 +1158,8 @@ static gboolean do_add_account(gpointer user_data) {
             purple_account_set_password(account, data->password);
         }
         purple_accounts_add(account);
+        /* Same pre-rename UI id as purple_core_init above. Each saved account
+         * carries this id as its per-UI enabled flag in accounts.xml. */
         purple_account_set_enabled(account, "adium-swift", TRUE);
         update_status("Connecting %s (%s)...", data->username, data->protocol_id);
     } else {
@@ -1167,7 +1172,7 @@ static gboolean do_add_account(gpointer user_data) {
     return G_SOURCE_REMOVE;
 }
 
-bool adium_purple_add_account(const char* username, const char* protocol_id, const char* password) {
+bool fluorite_purple_add_account(const char* username, const char* protocol_id, const char* password) {
     if (!username || !protocol_id) return false;
     AddAccountData *data = g_new0(AddAccountData, 1);
     data->username = g_strdup(username);
@@ -1206,7 +1211,7 @@ static gboolean do_remove_account(gpointer user_data) {
     return G_SOURCE_REMOVE;
 }
 
-bool adium_purple_remove_account(const char* username, const char* protocol_id) {
+bool fluorite_purple_remove_account(const char* username, const char* protocol_id) {
     if (!username || !protocol_id) return false;
     RemoveAccountData *data = g_new0(RemoveAccountData, 1);
     data->username = g_strdup(username);
@@ -1269,7 +1274,7 @@ static gboolean do_send_message(gpointer user_data) {
     return G_SOURCE_REMOVE;
 }
 
-bool adium_purple_send_message(const char* account_username, const char* protocol_id, const char* recipient_handle, const char* message_text) {
+bool fluorite_purple_send_message(const char* account_username, const char* protocol_id, const char* recipient_handle, const char* message_text) {
     if (!recipient_handle || !message_text) return false;
     SendMessageData *data = g_new0(SendMessageData, 1);
     data->account_username = account_username ? g_strdup(account_username) : NULL;
@@ -1340,7 +1345,7 @@ static gboolean do_exec_command(gpointer user_data) {
     return G_SOURCE_REMOVE;
 }
 
-bool adium_purple_exec_command(const char* account_username, const char* protocol_id, const char* conversation_name, const char* command, bool is_chat) {
+bool fluorite_purple_exec_command(const char* account_username, const char* protocol_id, const char* conversation_name, const char* command, bool is_chat) {
     if (!conversation_name || !command) return false;
     ExecCommandData *data = g_new0(ExecCommandData, 1);
     data->account_username = account_username ? g_strdup(account_username) : NULL;
@@ -1387,7 +1392,7 @@ static gboolean do_load_accounts(gpointer user_data) {
     return G_SOURCE_REMOVE;
 }
 
-void adium_purple_load_accounts(void) {
+void fluorite_purple_load_accounts(void) {
     if (!g_initialized) return;
     if (g_loop) {
         g_idle_add(do_load_accounts, NULL);
@@ -1409,7 +1414,7 @@ static gboolean do_uninit(gpointer user_data) {
     return G_SOURCE_REMOVE;
 }
 
-void adium_purple_uninit(void) {
+void fluorite_purple_uninit(void) {
     if (!g_initialized) return;
     if (g_loop) {
         g_idle_add(do_uninit, NULL);
@@ -1453,7 +1458,7 @@ static gboolean do_set_user_status(gpointer user_data) {
     return G_SOURCE_REMOVE;
 }
 
-bool adium_purple_set_user_status(const char* status_id, const char* message) {
+bool fluorite_purple_set_user_status(const char* status_id, const char* message) {
     if (!status_id) return false;
     SetStatusData *data = g_new0(SetStatusData, 1);
     data->status_id = g_strdup(status_id);
@@ -1511,7 +1516,7 @@ static gboolean do_set_account_option(gpointer user_data) {
     return G_SOURCE_REMOVE;
 }
 
-bool adium_purple_set_account_option(const char* username, const char* protocol_id, const char* key, const char* value) {
+bool fluorite_purple_set_account_option(const char* username, const char* protocol_id, const char* key, const char* value) {
     if (!username || !protocol_id || !key) return false;
     SetAccountOptionData *data = g_new0(SetAccountOptionData, 1);
     data->username = g_strdup(username);
@@ -1527,7 +1532,7 @@ bool adium_purple_set_account_option(const char* username, const char* protocol_
     return true;
 }
 
-bool adium_purple_set_account_int_option(const char* username, const char* protocol_id, const char* key, int value) {
+bool fluorite_purple_set_account_int_option(const char* username, const char* protocol_id, const char* key, int value) {
     if (!username || !protocol_id || !key) return false;
     SetAccountOptionData *data = g_new0(SetAccountOptionData, 1);
     data->username = g_strdup(username);
@@ -1543,7 +1548,7 @@ bool adium_purple_set_account_int_option(const char* username, const char* proto
     return true;
 }
 
-bool adium_purple_seed_account_int_option(const char* username, const char* protocol_id, const char* key, int value) {
+bool fluorite_purple_seed_account_int_option(const char* username, const char* protocol_id, const char* key, int value) {
     if (!username || !protocol_id || !key) return false;
     SetAccountOptionData *data = g_new0(SetAccountOptionData, 1);
     data->username = g_strdup(username);
@@ -1558,7 +1563,7 @@ bool adium_purple_seed_account_int_option(const char* username, const char* prot
     return true;
 }
 
-bool adium_purple_set_account_bool_option(const char* username, const char* protocol_id, const char* key, bool value) {
+bool fluorite_purple_set_account_bool_option(const char* username, const char* protocol_id, const char* key, bool value) {
     if (!username || !protocol_id || !key) return false;
     SetAccountOptionData *data = g_new0(SetAccountOptionData, 1);
     data->username = g_strdup(username);
@@ -1602,7 +1607,7 @@ static gboolean do_block_contact(gpointer user_data) {
     return G_SOURCE_REMOVE;
 }
 
-bool adium_purple_block_contact(const char* username, const char* protocol_id, const char* who) {
+bool fluorite_purple_block_contact(const char* username, const char* protocol_id, const char* who) {
     if (!username || !protocol_id || !who) return false;
     PrivacyData *data = g_new0(PrivacyData, 1);
     data->username = g_strdup(username);
@@ -1633,7 +1638,7 @@ static gboolean do_unblock_contact(gpointer user_data) {
     return G_SOURCE_REMOVE;
 }
 
-bool adium_purple_unblock_contact(const char* username, const char* protocol_id, const char* who) {
+bool fluorite_purple_unblock_contact(const char* username, const char* protocol_id, const char* who) {
     if (!username || !protocol_id || !who) return false;
     PrivacyData *data = g_new0(PrivacyData, 1);
     data->username = g_strdup(username);
@@ -1647,11 +1652,11 @@ bool adium_purple_unblock_contact(const char* username, const char* protocol_id,
     return true;
 }
 
-void adium_purple_set_xfer_callbacks(
-    adium_purple_on_xfer_new_cb xfer_new_cb,
-    adium_purple_on_xfer_update_cb xfer_update_cb,
-    adium_purple_on_xfer_cancel_cb xfer_cancel_cb,
-    adium_purple_on_xfer_destroyed_cb xfer_destroyed_cb
+void fluorite_purple_set_xfer_callbacks(
+    fluorite_purple_on_xfer_new_cb xfer_new_cb,
+    fluorite_purple_on_xfer_update_cb xfer_update_cb,
+    fluorite_purple_on_xfer_cancel_cb xfer_cancel_cb,
+    fluorite_purple_on_xfer_destroyed_cb xfer_destroyed_cb
 ) {
     g_xfer_new_cb = xfer_new_cb;
     g_xfer_update_cb = xfer_update_cb;
@@ -1684,7 +1689,7 @@ static gboolean do_xfer_accept(gpointer user_data) {
     return G_SOURCE_REMOVE;
 }
 
-bool adium_purple_xfer_accept(void* xfer_handle, const char* local_path) {
+bool fluorite_purple_xfer_accept(void* xfer_handle, const char* local_path) {
     if (!xfer_handle) return false;
     XferAcceptData *data = g_new0(XferAcceptData, 1);
     data->xfer_handle = xfer_handle;
@@ -1714,7 +1719,7 @@ static gboolean do_xfer_cancel(gpointer user_data) {
     return G_SOURCE_REMOVE;
 }
 
-bool adium_purple_xfer_cancel(void* xfer_handle) {
+bool fluorite_purple_xfer_cancel(void* xfer_handle) {
     if (!xfer_handle) return false;
     XferCancelData *data = g_new0(XferCancelData, 1);
     data->xfer_handle = xfer_handle;
@@ -1762,7 +1767,7 @@ static gboolean do_send_file(gpointer user_data) {
     return G_SOURCE_REMOVE;
 }
 
-bool adium_purple_send_file(const char* account_username, const char* protocol_id, const char* who, const char* filepath) {
+bool fluorite_purple_send_file(const char* account_username, const char* protocol_id, const char* who, const char* filepath) {
     if (!who || !filepath) return false;
     SendFileData *data = g_new0(SendFileData, 1);
     data->account_username = account_username ? g_strdup(account_username) : NULL;
@@ -1777,14 +1782,14 @@ bool adium_purple_send_file(const char* account_username, const char* protocol_i
     return true;
 }
 
-void adium_purple_set_chat_callbacks(
-    adium_purple_on_chat_joined_cb chat_joined_cb,
-    adium_purple_on_chat_left_cb chat_left_cb,
-    adium_purple_on_chat_message_cb chat_message_cb,
-    adium_purple_on_chat_buddy_joined_cb chat_buddy_joined_cb,
-    adium_purple_on_chat_buddy_left_cb chat_buddy_left_cb,
-    adium_purple_on_chat_listed_cb chat_listed_cb,
-    adium_purple_on_chat_unlisted_cb chat_unlisted_cb
+void fluorite_purple_set_chat_callbacks(
+    fluorite_purple_on_chat_joined_cb chat_joined_cb,
+    fluorite_purple_on_chat_left_cb chat_left_cb,
+    fluorite_purple_on_chat_message_cb chat_message_cb,
+    fluorite_purple_on_chat_buddy_joined_cb chat_buddy_joined_cb,
+    fluorite_purple_on_chat_buddy_left_cb chat_buddy_left_cb,
+    fluorite_purple_on_chat_listed_cb chat_listed_cb,
+    fluorite_purple_on_chat_unlisted_cb chat_unlisted_cb
 ) {
     g_chat_joined_cb = chat_joined_cb;
     g_chat_left_cb = chat_left_cb;
@@ -1836,7 +1841,7 @@ static gboolean do_join_chat(gpointer user_data) {
     return G_SOURCE_REMOVE;
 }
 
-bool adium_purple_join_chat(const char* username, const char* protocol_id, const char* room_name) {
+bool fluorite_purple_join_chat(const char* username, const char* protocol_id, const char* room_name) {
     if (!username || !protocol_id || !room_name) return false;
     JoinChatData *data = g_new0(JoinChatData, 1);
     data->username = g_strdup(username);
@@ -1882,7 +1887,7 @@ static gboolean do_send_chat_message(gpointer user_data) {
     return G_SOURCE_REMOVE;
 }
 
-bool adium_purple_send_chat_message(const char* account_username, const char* protocol_id, const char* room_name, const char* message_text) {
+bool fluorite_purple_send_chat_message(const char* account_username, const char* protocol_id, const char* room_name, const char* message_text) {
     if (!room_name || !message_text) return false;
     SendChatMessageData *data = g_new0(SendChatMessageData, 1);
     data->account_username = account_username ? g_strdup(account_username) : NULL;

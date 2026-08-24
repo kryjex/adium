@@ -11,7 +11,7 @@ Fluorite interacts with libpurple through the Swift-C bridge (`CLibpurple` & `Pu
 1. **Discovery**: `PurpleBridgeService` scans:
    - `Fluorite.app/Contents/PlugIns/*.so` (when running inside the macOS Application Bundle)
    - `Plugins/*/*.so` (during development in the workspace)
-2. **Loading**: Each discovered plugin is loaded via `adium_purple_load_plugin` (`purple_plugins_load`).
+2. **Loading**: Each discovered plugin is loaded via `fluorite_purple_load_plugin` (`purple_plugins_load`).
 3. **Registration**: The plugin executes its `PURPLE_INIT_PLUGIN` macro, registering a `PurplePluginInfo` and `PurplePluginProtocolInfo` structure under a unique protocol ID (e.g., `prpl-hehoe-whatsmeow`, `prpl-eionrobb-msteams`).
 4. **Swift UI Integration**: `AccountProtocol` in `Models.swift` maps UI protocol options to matching `purpleProtocolID` strings.
 

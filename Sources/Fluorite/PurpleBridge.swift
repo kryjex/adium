@@ -75,7 +75,7 @@ public final class PurpleBridgeService {
     public func setUserStatus(_ status: OnlineStatus) {
         self.myStatus = status
         if isLibpurpleLoaded {
-            _ = adium_purple_set_user_status(purpleStatusId(for: status), myStatusMessage)
+            _ = fluorite_purple_set_user_status(purpleStatusId(for: status), myStatusMessage)
         }
     }
 
@@ -87,7 +87,7 @@ public final class PurpleBridgeService {
         self.myStatusMessage = trimmed
         UserDefaults.standard.set(trimmed, forKey: savedStatusMessageKey)
         if isLibpurpleLoaded {
-            _ = adium_purple_set_user_status(purpleStatusId(for: myStatus), trimmed)
+            _ = fluorite_purple_set_user_status(purpleStatusId(for: myStatus), trimmed)
         }
     }
     
@@ -104,10 +104,10 @@ public final class PurpleBridgeService {
                 // You must apply options after the account exists in libpurple.
                 // The two calls go through g_idle_add in order.
                 // The do_set_account_option function will fail if applied first.
-                _ = adium_purple_add_account(acc.username, acc.accountProtocol.purpleProtocolID, password)
+                _ = fluorite_purple_add_account(acc.username, acc.accountProtocol.purpleProtocolID, password)
                 applyAccountOptions(acc)
             }
-            if let statusCStr = adium_purple_get_status_info() {
+            if let statusCStr = fluorite_purple_get_status_info() {
                 self.connectionState = String(cString: statusCStr)
             }
         }
@@ -488,9 +488,9 @@ public final class PurpleBridgeService {
                 let account = resolveAccount(for: contact)
                 if let account = account {
                     if contact.isBlocked {
-                        _ = adium_purple_block_contact(account.username, contact.accountProtocol.purpleProtocolID, contact.handle)
+                        _ = fluorite_purple_block_contact(account.username, contact.accountProtocol.purpleProtocolID, contact.handle)
                     } else {
-                        _ = adium_purple_unblock_contact(account.username, contact.accountProtocol.purpleProtocolID, contact.handle)
+                        _ = fluorite_purple_unblock_contact(account.username, contact.accountProtocol.purpleProtocolID, contact.handle)
                     }
                 }
             }
@@ -523,28 +523,28 @@ public final class PurpleBridgeService {
         let protoID = account.accountProtocol.purpleProtocolID
         
         if let server = account.server, !server.isEmpty {
-            _ = adium_purple_set_account_option(username, protoID, "server", server)
-            _ = adium_purple_set_account_option(username, protoID, "connect_server", server)
+            _ = fluorite_purple_set_account_option(username, protoID, "server", server)
+            _ = fluorite_purple_set_account_option(username, protoID, "connect_server", server)
         }
         if let port = account.port {
-            _ = adium_purple_set_account_int_option(username, protoID, "port", Int32(port))
+            _ = fluorite_purple_set_account_int_option(username, protoID, "port", Int32(port))
         }
         if let resource = account.resource, !resource.isEmpty {
-            _ = adium_purple_set_account_option(username, protoID, "resource", resource)
+            _ = fluorite_purple_set_account_option(username, protoID, "resource", resource)
         }
         if let useSSL = account.useSSL {
             // "require_tls" only works for XMPP.
             // Other protocols negotiate TLS automatically.
             if account.accountProtocol == .xmpp {
-                _ = adium_purple_set_account_bool_option(username, protoID, "require_tls", useSSL)
+                _ = fluorite_purple_set_account_bool_option(username, protoID, "require_tls", useSSL)
             }
         }
         if account.accountProtocol == .whatsapp {
             // AnimatedImageView renders WebP itself; gdk-pixbuf often cannot.
-            _ = adium_purple_set_account_bool_option(username, protoID, "inline-webp", true)
+            _ = fluorite_purple_set_account_bool_option(username, protoID, "inline-webp", true)
             // The contact filter in restoreSavedContacts assumes the plugin
             // drops channel (newsletter) chats.
-            _ = adium_purple_set_account_bool_option(username, protoID, "ignore-newsletters", true)
+            _ = fluorite_purple_set_account_bool_option(username, protoID, "ignore-newsletters", true)
         }
         if account.accountProtocol == .teams {
             // A fresh account has no last_message_timestamp, and the plugin
@@ -553,10 +553,10 @@ public final class PurpleBridgeService {
             // path. Zero makes the first sweep pull the last page of every
             // conversation regardless of age. Later logins keep the marker
             // the plugin maintains.
-            _ = adium_purple_seed_account_int_option(username, protoID, "last_message_timestamp", 0)
+            _ = fluorite_purple_seed_account_int_option(username, protoID, "last_message_timestamp", 0)
         }
         for (key, val) in account.customOptions {
-            _ = adium_purple_set_account_option(username, protoID, key, val)
+            _ = fluorite_purple_set_account_option(username, protoID, key, val)
         }
     }
     
@@ -608,11 +608,11 @@ public final class PurpleBridgeService {
             // This adds the account before it applies options.
             // do_set_account_option uses purple_accounts_find.
             // purple_accounts_find returns NULL until do_add_account runs.
-            _ = adium_purple_add_account(username, protocolType.purpleProtocolID, fetchedPassword)
+            _ = fluorite_purple_add_account(username, protocolType.purpleProtocolID, fetchedPassword)
             if let acc = accounts.first(where: { $0.username == username && $0.accountProtocol == protocolType }) {
                 applyAccountOptions(acc)
             }
-            if let statusCStr = adium_purple_get_status_info() {
+            if let statusCStr = fluorite_purple_get_status_info() {
                 self.connectionState = String(cString: statusCStr)
             }
         }
@@ -654,7 +654,7 @@ public final class PurpleBridgeService {
             )
             idsToRemove.insert(account.accountProtocol.purpleProtocolID)
             for protocolID in idsToRemove {
-                _ = adium_purple_remove_account(account.username, protocolID)
+                _ = fluorite_purple_remove_account(account.username, protocolID)
             }
         }
         
@@ -741,14 +741,14 @@ public final class PurpleBridgeService {
         let userDir = userHome + "/.fluorite"
         
         // 1. Set event callbacks from C to Swift.
-        adium_purple_set_event_callbacks(
+        fluorite_purple_set_event_callbacks(
             PurpleBridgeService.handleContactCallback,
             PurpleBridgeService.handleMessageCallback,
             PurpleBridgeService.handleStatusCallback,
             PurpleBridgeService.handleAccountStateCallback
         )
         
-        adium_purple_set_extended_event_callbacks(
+        fluorite_purple_set_extended_event_callbacks(
             PurpleBridgeService.handleRequestInputCallback,
             PurpleBridgeService.handleRequestActionCallback,
             PurpleBridgeService.handleRequestCloseCallback,
@@ -758,7 +758,7 @@ public final class PurpleBridgeService {
             PurpleBridgeService.handleNotifyMessageCallback
         )
 
-        adium_purple_set_chat_callbacks(
+        fluorite_purple_set_chat_callbacks(
             PurpleBridgeService.handleChatJoinedCallback,
             PurpleBridgeService.handleChatLeftCallback,
             PurpleBridgeService.handleChatMessageCallback,
@@ -769,13 +769,13 @@ public final class PurpleBridgeService {
         )
 
         // 2. Initialize libpurple core.
-        let success = adium_purple_init(pluginsSearchDir, userDir)
+        let success = fluorite_purple_init(pluginsSearchDir, userDir)
         
         if success {
             self.isLibpurpleLoaded = true
             
             // Start GLib background socket event loop.
-            adium_purple_start_event_loop()
+            fluorite_purple_start_event_loop()
             
             // This finds and loads all available plugin .so files.
             // A plugin the user disabled stays on disk but does not load:
@@ -789,7 +789,7 @@ public final class PurpleBridgeService {
                 if PluginManager.shared.isDisabled(filename: pluginFileName) {
                     continue
                 }
-                _ = adium_purple_load_plugin(pluginPath)
+                _ = fluorite_purple_load_plugin(pluginPath)
                 loadedPluginNames.append(pluginFileName)
             }
             if !loadedPluginNames.isEmpty {
@@ -801,14 +801,14 @@ public final class PurpleBridgeService {
             for acc in accounts {
                 let accountKey = "\(acc.username):\(acc.accountProtocol.purpleProtocolID)"
                 let password = KeychainHelper.fetchPassword(for: accountKey) ?? ""
-                _ = adium_purple_add_account(acc.username, acc.accountProtocol.purpleProtocolID, password)
+                _ = fluorite_purple_add_account(acc.username, acc.accountProtocol.purpleProtocolID, password)
                 applyAccountOptions(acc)
             }
             
             // This emits loaded accounts and buddies from libpurple.
-            adium_purple_load_accounts()
+            fluorite_purple_load_accounts()
             
-            if let statusCStr = adium_purple_get_status_info() {
+            if let statusCStr = fluorite_purple_get_status_info() {
                 self.connectionState = String(cString: statusCStr)
             } else {
                 self.connectionState = t("Active (\(self.activePluginName))")
@@ -837,7 +837,7 @@ public final class PurpleBridgeService {
               let username = contact.accountUsername else { return }
         let proto = contact.accountProtocol.purpleProtocolID
         guard !isChatJoined(username: username, protocolId: proto, roomName: contact.handle) else { return }
-        _ = adium_purple_join_chat(username, proto, contact.handle)
+        _ = fluorite_purple_join_chat(username, proto, contact.handle)
     }
     
     public func closeTab(_ contactID: UUID) {
@@ -895,7 +895,7 @@ public final class PurpleBridgeService {
         openTab(for: groupContact.id)
 
         if isLibpurpleLoaded {
-            _ = adium_purple_join_chat(account.username, account.accountProtocol.purpleProtocolID, trimmedName)
+            _ = fluorite_purple_join_chat(account.username, account.accountProtocol.purpleProtocolID, trimmedName)
         }
 
         return groupContact
@@ -966,11 +966,11 @@ public final class PurpleBridgeService {
 
         if isLibpurpleLoaded, let account = account {
             if contact.isGroupChat {
-                _ = adium_purple_send_chat_message(account.username, contact.accountProtocol.purpleProtocolID, contact.handle, text)
+                _ = fluorite_purple_send_chat_message(account.username, contact.accountProtocol.purpleProtocolID, contact.handle, text)
             } else {
-                _ = adium_purple_send_message(account.username, contact.accountProtocol.purpleProtocolID, contact.handle, text)
+                _ = fluorite_purple_send_message(account.username, contact.accountProtocol.purpleProtocolID, contact.handle, text)
             }
-            if let statusCStr = adium_purple_get_status_info() {
+            if let statusCStr = fluorite_purple_get_status_info() {
                 self.connectionState = String(cString: statusCStr)
             }
         }
@@ -997,7 +997,7 @@ public final class PurpleBridgeService {
             return
         }
         pendingCallRequests[contact.handle] = Date()
-        _ = adium_purple_exec_command(account.username, contact.accountProtocol.purpleProtocolID, contact.handle, "call", contact.isGroupChat)
+        _ = fluorite_purple_exec_command(account.username, contact.accountProtocol.purpleProtocolID, contact.handle, "call", contact.isGroupChat)
     }
 
     /// This opens the call window if this message answers a pending /call.
@@ -1484,7 +1484,7 @@ public final class PurpleBridgeService {
                 let totalUnread = unreadCounts.values.reduce(0, +)
                 EventManager.shared.setUnreadCount(totalUnread)
             }
-            let eventType: AdiumEventType =
+            let eventType: FluoriteEventType =
                 (!isSystem && Self.isGroupMention(text: text, accounts: accounts)) ? .groupMention : .messageReceived
             // A muted room keeps its unread badge but stays silent.
             if !c.isMuted {
@@ -1524,7 +1524,7 @@ public final class PurpleBridgeService {
 
     // MARK: - C Callback Definitions
     
-    private static let handleContactCallback: adium_purple_on_contact_cb = { name, handle, statusId, statusName, group, protocolId in
+    private static let handleContactCallback: fluorite_purple_on_contact_cb = { name, handle, statusId, statusName, group, protocolId in
         guard let name = name, let handle = handle, let statusId = statusId, let statusName = statusName, let group = group, let protocolId = protocolId else { return }
         let nStr = String(cString: name)
         let hStr = String(cString: handle)
@@ -1538,7 +1538,7 @@ public final class PurpleBridgeService {
         }
     }
     
-    private static let handleMessageCallback: adium_purple_on_message_cb = { senderHandle, messageText, isFromMe, isSystem, protocolId, accountUsername, timestamp, imageData, imageSize in
+    private static let handleMessageCallback: fluorite_purple_on_message_cb = { senderHandle, messageText, isFromMe, isSystem, protocolId, accountUsername, timestamp, imageData, imageSize in
         guard let senderHandle = senderHandle, let messageText = messageText else { return }
         let hStr = String(cString: senderHandle)
         let mStr = String(cString: messageText)
@@ -1552,7 +1552,7 @@ public final class PurpleBridgeService {
         }
     }
     
-    private static let handleStatusCallback: adium_purple_on_status_cb = { statusText in
+    private static let handleStatusCallback: fluorite_purple_on_status_cb = { statusText in
         guard let statusText = statusText else { return }
         let sStr = String(cString: statusText)
         
@@ -1561,7 +1561,7 @@ public final class PurpleBridgeService {
         }
     }
     
-    private static let handleAccountStateCallback: adium_purple_on_account_state_cb = { username, protocolId, isConnected, statusMsg in
+    private static let handleAccountStateCallback: fluorite_purple_on_account_state_cb = { username, protocolId, isConnected, statusMsg in
         guard let username = username, let protocolId = protocolId, let statusMsg = statusMsg else { return }
         let uStr = String(cString: username)
         let pStr = String(cString: protocolId)
@@ -1616,9 +1616,9 @@ public final class PurpleBridgeService {
         guard pendingRequestAddrs.remove(addr) != nil else { return }
 
         if response == .alertFirstButtonReturn {
-            adium_purple_request_input_respond(requestHandle.rawPointer, field.stringValue, true)
+            fluorite_purple_request_input_respond(requestHandle.rawPointer, field.stringValue, true)
         } else {
-            adium_purple_request_input_respond(requestHandle.rawPointer, nil, false)
+            fluorite_purple_request_input_respond(requestHandle.rawPointer, nil, false)
         }
     }
 
@@ -1647,7 +1647,7 @@ public final class PurpleBridgeService {
         let chosenIdx = response.rawValue - NSApplication.ModalResponse.alertFirstButtonReturn.rawValue
         let fallbackIdx = defaultAction >= 0 ? Int(defaultAction) : 0
         let actionIdx = (chosenIdx >= 0 && chosenIdx < actionTitles.count) ? chosenIdx : fallbackIdx
-        adium_purple_request_action_respond(requestHandle.rawPointer, Int32(actionIdx))
+        fluorite_purple_request_action_respond(requestHandle.rawPointer, Int32(actionIdx))
     }
 
     func onRequestClose(requestHandle: RequestHandleWrapper) {
@@ -1668,7 +1668,7 @@ public final class PurpleBridgeService {
     
     // MARK: - Extended C Callback Definitions
     
-    private static let handleRequestInputCallback: adium_purple_on_request_input_cb = { requestHandle, title, primary, secondary, defaultValue, masked, hint in
+    private static let handleRequestInputCallback: fluorite_purple_on_request_input_cb = { requestHandle, title, primary, secondary, defaultValue, masked, hint in
         guard let requestHandle = requestHandle else { return }
         let handleAddr = UInt(bitPattern: requestHandle)
         let tStr = title != nil ? String(cString: title!) : ""
@@ -1685,7 +1685,7 @@ public final class PurpleBridgeService {
         }
     }
     
-    private static let handleRequestActionCallback: adium_purple_on_request_action_cb = { requestHandle, title, primary, secondary, defaultAction, actionTitles, actionCount in
+    private static let handleRequestActionCallback: fluorite_purple_on_request_action_cb = { requestHandle, title, primary, secondary, defaultAction, actionTitles, actionCount in
         guard let requestHandle = requestHandle else { return }
         let handleAddr = UInt(bitPattern: requestHandle)
         let tStr = title != nil ? String(cString: title!) : ""
@@ -1709,7 +1709,7 @@ public final class PurpleBridgeService {
         }
     }
     
-    private static let handleRequestCloseCallback: adium_purple_on_request_close_cb = { requestHandle in
+    private static let handleRequestCloseCallback: fluorite_purple_on_request_close_cb = { requestHandle in
         guard let requestHandle = requestHandle else { return }
         let handleAddr = UInt(bitPattern: requestHandle)
         DispatchQueue.main.async {
@@ -1720,7 +1720,7 @@ public final class PurpleBridgeService {
         }
     }
     
-    private static let handleConnectionProgressCallback: adium_purple_on_connection_progress_cb = { username, protocolId, text, step, stepCount in
+    private static let handleConnectionProgressCallback: fluorite_purple_on_connection_progress_cb = { username, protocolId, text, step, stepCount in
         guard let username = username, let protocolId = protocolId, let text = text else { return }
         let uStr = String(cString: username)
         let pStr = String(cString: protocolId)
@@ -1733,7 +1733,7 @@ public final class PurpleBridgeService {
         }
     }
     
-    private static let handleTypingCallback: adium_purple_on_typing_cb = { handle, isTyping in
+    private static let handleTypingCallback: fluorite_purple_on_typing_cb = { handle, isTyping in
         guard let handle = handle else { return }
         let hStr = String(cString: handle)
         
@@ -1742,7 +1742,7 @@ public final class PurpleBridgeService {
         }
     }
     
-    private static let handleBuddyRemovedCallback: adium_purple_on_buddy_removed_cb = { handle in
+    private static let handleBuddyRemovedCallback: fluorite_purple_on_buddy_removed_cb = { handle in
         guard let handle = handle else { return }
         let hStr = String(cString: handle)
 
@@ -1751,7 +1751,7 @@ public final class PurpleBridgeService {
         }
     }
 
-    private static let handleChatJoinedCallback: adium_purple_on_chat_joined_cb = { roomName, username, protocolId in
+    private static let handleChatJoinedCallback: fluorite_purple_on_chat_joined_cb = { roomName, username, protocolId in
         guard let roomName = roomName, let username = username, let protocolId = protocolId else { return }
         let rStr = String(cString: roomName)
         let uStr = String(cString: username)
@@ -1762,7 +1762,7 @@ public final class PurpleBridgeService {
         }
     }
 
-    private static let handleChatLeftCallback: adium_purple_on_chat_left_cb = { roomName, username, protocolId in
+    private static let handleChatLeftCallback: fluorite_purple_on_chat_left_cb = { roomName, username, protocolId in
         guard let roomName = roomName, let username = username, let protocolId = protocolId else { return }
         let rStr = String(cString: roomName)
         let uStr = String(cString: username)
@@ -1773,7 +1773,7 @@ public final class PurpleBridgeService {
         }
     }
 
-    private static let handleChatMessageCallback: adium_purple_on_chat_message_cb = { roomName, accountUsername, protocolId, sender, messageText, isFromMe, isSystem, timestamp in
+    private static let handleChatMessageCallback: fluorite_purple_on_chat_message_cb = { roomName, accountUsername, protocolId, sender, messageText, isFromMe, isSystem, timestamp in
         guard let roomName = roomName, let messageText = messageText else { return }
         let rStr = String(cString: roomName)
         let uStr = accountUsername != nil ? String(cString: accountUsername!) : ""
@@ -1786,7 +1786,7 @@ public final class PurpleBridgeService {
         }
     }
 
-    private static let handleChatBuddyJoinedCallback: adium_purple_on_chat_buddy_joined_cb = { roomName, buddyName, newArrival in
+    private static let handleChatBuddyJoinedCallback: fluorite_purple_on_chat_buddy_joined_cb = { roomName, buddyName, newArrival in
         guard let roomName = roomName, let buddyName = buddyName else { return }
         let rStr = String(cString: roomName)
         let bStr = String(cString: buddyName)
@@ -1796,7 +1796,7 @@ public final class PurpleBridgeService {
         }
     }
 
-    private static let handleChatBuddyLeftCallback: adium_purple_on_chat_buddy_left_cb = { roomName, buddyName in
+    private static let handleChatBuddyLeftCallback: fluorite_purple_on_chat_buddy_left_cb = { roomName, buddyName in
         guard let roomName = roomName, let buddyName = buddyName else { return }
         let rStr = String(cString: roomName)
         let bStr = String(cString: buddyName)
@@ -1806,7 +1806,7 @@ public final class PurpleBridgeService {
         }
     }
 
-    private static let handleChatListedCallback: adium_purple_on_chat_listed_cb = { roomName, title, groupName, username, protocolId in
+    private static let handleChatListedCallback: fluorite_purple_on_chat_listed_cb = { roomName, title, groupName, username, protocolId in
         guard let roomName = roomName else { return }
         let rStr = String(cString: roomName)
         let tStr = title != nil ? String(cString: title!) : ""
@@ -1818,7 +1818,7 @@ public final class PurpleBridgeService {
         }
     }
 
-    private static let handleChatUnlistedCallback: adium_purple_on_chat_unlisted_cb = { roomName, username, protocolId in
+    private static let handleChatUnlistedCallback: fluorite_purple_on_chat_unlisted_cb = { roomName, username, protocolId in
         guard let roomName = roomName else { return }
         let rStr = String(cString: roomName)
         let uStr = username != nil ? String(cString: username!) : ""
@@ -1829,7 +1829,7 @@ public final class PurpleBridgeService {
         }
     }
 
-    private static let handleNotifyMessageCallback: adium_purple_on_notify_message_cb = { type, title, primary, secondary in
+    private static let handleNotifyMessageCallback: fluorite_purple_on_notify_message_cb = { type, title, primary, secondary in
         let tStr = title != nil ? String(cString: title!) : ""
         let pStr = primary != nil ? String(cString: primary!) : ""
         let sStr = secondary != nil ? String(cString: secondary!) : ""

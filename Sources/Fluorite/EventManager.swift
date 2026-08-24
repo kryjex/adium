@@ -2,7 +2,7 @@ import Foundation
 import AppKit
 import UserNotifications
 
-public enum AdiumEventType: String, Codable, CaseIterable, Identifiable {
+public enum FluoriteEventType: String, Codable, CaseIterable, Identifiable {
     case messageReceived = "messageReceived"
     case messageSent = "messageSent"
     case contactOnline = "contactOnline"
@@ -50,7 +50,7 @@ public enum AdiumEventType: String, Codable, CaseIterable, Identifiable {
 }
 
 public struct EventRule: Codable, Equatable, Identifiable {
-    public var eventType: AdiumEventType
+    public var eventType: FluoriteEventType
     public var playSound: Bool
     public var soundName: String
     public var bounceDock: Bool
@@ -60,7 +60,7 @@ public struct EventRule: Codable, Equatable, Identifiable {
     public var id: String { eventType.rawValue }
     
     public init(
-        eventType: AdiumEventType,
+        eventType: FluoriteEventType,
         playSound: Bool = true,
         soundName: String? = nil,
         bounceDock: Bool = false,
@@ -84,9 +84,9 @@ public final class EventManager {
     private let rulesStorageKey = "AdiumEventRules"
     private let unreadCountKey = "AdiumUnreadCount"
     
-    public var rules: [AdiumEventType: EventRule] = [:]
+    public var rules: [FluoriteEventType: EventRule] = [:]
     public private(set) var unreadCount: Int = 0
-    public private(set) var lastTriggeredEvent: (type: AdiumEventType, title: String, content: String)?
+    public private(set) var lastTriggeredEvent: (type: FluoriteEventType, title: String, content: String)?
     
     public static let availableSounds: [String] = [
         "Tink", "Pop", "Glass", "Basso", "Purr", "Submarine", "Sosumi", "Ping", "Hero", "Frog"
@@ -107,7 +107,7 @@ public final class EventManager {
         }
         
         // This ensures default rules for all event types.
-        for eventType in AdiumEventType.allCases {
+        for eventType in FluoriteEventType.allCases {
             if rules[eventType] == nil {
                 let defaultRule: EventRule
                 switch eventType {
@@ -153,7 +153,7 @@ public final class EventManager {
     
     // MARK: - Event Triggering
     
-    public func triggerEvent(_ eventType: AdiumEventType, title: String, content: String, contactID: UUID? = nil) {
+    public func triggerEvent(_ eventType: FluoriteEventType, title: String, content: String, contactID: UUID? = nil) {
         lastTriggeredEvent = (type: eventType, title: title, content: content)
         
         let rule = rules[eventType] ?? EventRule(eventType: eventType)
@@ -221,7 +221,7 @@ public final class EventManager {
     }
 
     /// This maps an app event to its classic Adium sound key.
-    nonisolated static func classicSoundKey(for eventType: AdiumEventType) -> String? {
+    nonisolated static func classicSoundKey(for eventType: FluoriteEventType) -> String? {
         switch eventType {
         case .messageReceived, .groupMention: return "Message Received"
         case .messageSent: return "Message Sent"
@@ -234,7 +234,7 @@ public final class EventManager {
         }
     }
 
-    nonisolated private static func customSoundFile(for eventType: AdiumEventType) -> URL? {
+    nonisolated private static func customSoundFile(for eventType: FluoriteEventType) -> URL? {
         guard let name = activeSoundSetName(),
               let key = classicSoundKey(for: eventType) else { return nil }
         let plist = soundSetsRoot()

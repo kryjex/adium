@@ -99,7 +99,7 @@ public final class FileTransferManager {
 
     /// This registers callbacks from PurpleBridge to listen to file transfers.
     public func registerPurpleCallbacks() {
-        adium_purple_set_xfer_callbacks(
+        fluorite_purple_set_xfer_callbacks(
             FileTransferManager.handleXferNewCallback,
             FileTransferManager.handleXferUpdateCallback,
             FileTransferManager.handleXferCancelCallback,
@@ -114,7 +114,7 @@ public final class FileTransferManager {
         transfers[idx].state = .transferring
 
         if let rawAddr = item.rawPointerAddr, let ptr = UnsafeMutableRawPointer(bitPattern: rawAddr) {
-            _ = adium_purple_xfer_accept(ptr, saveToPath)
+            _ = fluorite_purple_xfer_accept(ptr, saveToPath)
         }
     }
 
@@ -124,7 +124,7 @@ public final class FileTransferManager {
         transfers[idx].state = .cancelled
 
         if let rawAddr = item.rawPointerAddr, let ptr = UnsafeMutableRawPointer(bitPattern: rawAddr) {
-            _ = adium_purple_xfer_cancel(ptr)
+            _ = fluorite_purple_xfer_cancel(ptr)
         }
     }
 
@@ -156,7 +156,7 @@ public final class FileTransferManager {
             return
         }
 
-        _ = adium_purple_send_file(account.username, contact.accountProtocol.purpleProtocolID, contact.handle, fileURL.path)
+        _ = fluorite_purple_send_file(account.username, contact.accountProtocol.purpleProtocolID, contact.handle, fileURL.path)
     }
 
     /// These are handlers called from C callbacks.
@@ -225,7 +225,7 @@ public final class FileTransferManager {
     }
 
     // C static callbacks
-    private static let handleXferNewCallback: adium_purple_on_xfer_new_cb = { xferHandle, who, filename, size, isIncoming in
+    private static let handleXferNewCallback: fluorite_purple_on_xfer_new_cb = { xferHandle, who, filename, size, isIncoming in
         guard let xferHandle = xferHandle else { return }
         let addr = UInt(bitPattern: xferHandle)
         let wStr = who != nil ? String(cString: who!) : ""
@@ -237,7 +237,7 @@ public final class FileTransferManager {
         }
     }
     
-    private static let handleXferUpdateCallback: adium_purple_on_xfer_update_cb = { xferHandle, bytesSent, totalBytes, status in
+    private static let handleXferUpdateCallback: fluorite_purple_on_xfer_update_cb = { xferHandle, bytesSent, totalBytes, status in
         guard let xferHandle = xferHandle else { return }
         let addr = UInt(bitPattern: xferHandle)
         let bs = Int64(bytesSent)
@@ -248,7 +248,7 @@ public final class FileTransferManager {
         }
     }
     
-    private static let handleXferCancelCallback: adium_purple_on_xfer_cancel_cb = { xferHandle, byLocal in
+    private static let handleXferCancelCallback: fluorite_purple_on_xfer_cancel_cb = { xferHandle, byLocal in
         guard let xferHandle = xferHandle else { return }
         let addr = UInt(bitPattern: xferHandle)
 
@@ -257,7 +257,7 @@ public final class FileTransferManager {
         }
     }
 
-    private static let handleXferDestroyedCallback: adium_purple_on_xfer_destroyed_cb = { xferHandle in
+    private static let handleXferDestroyedCallback: fluorite_purple_on_xfer_destroyed_cb = { xferHandle in
         guard let xferHandle = xferHandle else { return }
         let addr = UInt(bitPattern: xferHandle)
 

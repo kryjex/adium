@@ -184,7 +184,7 @@ public final class PluginManager {
             persistDisabled(disabled)
             if let idx = installed.firstIndex(where: { $0.id == filename }) {
                 installed[idx].isEnabled = true
-                _ = adium_purple_load_plugin(installed[idx].path)
+                _ = fluorite_purple_load_plugin(installed[idx].path)
             }
         } else {
             disabled.insert(filename)
@@ -297,7 +297,7 @@ public final class PluginManager {
         }
 
         removeQuarantine(at: destination)
-        _ = adium_purple_load_plugin(destination.path)
+        _ = fluorite_purple_load_plugin(destination.path)
 
         var versions = installedVersions()
         versions[entry.filename] = entry.version
@@ -337,7 +337,7 @@ public final class PluginManager {
         }
 
         removeQuarantine(at: destination)
-        _ = adium_purple_load_plugin(destination.path)
+        _ = fluorite_purple_load_plugin(destination.path)
 
         var disabled = disabledFilenames()
         disabled.remove(destination.lastPathComponent)
